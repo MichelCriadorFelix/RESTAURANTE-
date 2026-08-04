@@ -22,23 +22,38 @@ export interface User {
   cookieConsentAt?: number;
 }
 
+export interface StepOption {
+  name: string;
+  price?: number;
+}
+
+export interface CustomizationStep {
+  title: string;
+  min: number;
+  max: number;
+  options: StepOption[];
+}
+
 export interface Product {
   id: string;
   name: string;
   description: string;
   price: number;
-  category: 'refeicao' | 'bebida';
+  category: string;
   available: boolean;
-  options?: string[]; // e.g., ['batata frita', 'legumes', 'verduras']
-  priceOption2?: number; // Price for 2 pieces for meals
+  options?: string[]; // Legacy
+  priceOption2?: number; // Legacy
   imageUrl?: string;
+  customizationSteps?: CustomizationStep[];
 }
 
 export interface CartItem {
   product: Product;
   quantity: number;
-  selectedOption?: string;
-  selectedSize?: '1 pedaço' | '2 pedaços';
+  selectedOption?: string; // Legacy
+  selectedSize?: '1 pedaço' | '2 pedaços'; // Legacy
+  customizationSelections?: { [stepTitle: string]: StepOption[] };
+  notes?: string;
   totalPrice: number;
 }
 

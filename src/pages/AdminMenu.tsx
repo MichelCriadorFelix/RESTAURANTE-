@@ -152,8 +152,12 @@ export default function AdminMenu() {
       setIsFormOpen(false);
       setEditingId(null);
       setImageFile(null);
-    } catch (err) {
-      handleFirestoreError(err, editingId ? OperationType.UPDATE : OperationType.CREATE, 'products');
+    } catch (err: any) {
+      setAlert({
+        type: 'error',
+        message: 'Erro ao Salvar',
+        submessage: err.message || 'Verifique sua conexão e tente novamente.'
+      });
     } finally {
       setIsUploading(false);
     }

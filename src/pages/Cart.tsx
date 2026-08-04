@@ -254,14 +254,28 @@ export default function Cart() {
                 )}
                 <div className="flex-1 min-w-0">
                   <h4 className="text-sm font-bold text-gray-900 truncate" translate="no">{item.product.name}</h4>
-                  <p className="text-[10px] text-gray-500 mt-1 uppercase tracking-widest font-bold">
-                    {item.product.category === 'refeicao' && (
-                      <>
-                        {item.selectedSize} 
-                        {item.selectedOption && ` • ${item.selectedOption}`}
-                      </>
-                    )}
-                  </p>
+                  
+                  {item.customizationSelections ? (
+                    <div className="text-[10px] text-gray-500 mt-1 space-y-1">
+                      {Object.entries(item.customizationSelections).map(([step, options]) => (
+                        options.length > 0 && (
+                          <div key={step}>
+                            <span className="font-bold">{step}:</span> {options.map(o => o.name).join(', ')}
+                          </div>
+                        )
+                      ))}
+                      {item.notes && <div className="italic break-words">Obs: {item.notes}</div>}
+                    </div>
+                  ) : (
+                    <p className="text-[10px] text-gray-500 mt-1 uppercase tracking-widest font-bold">
+                      {item.selectedSize}
+                      {item.selectedOption && ` • ${item.selectedOption}`}
+                    </p>
+                  )}
+                  
+                  <div className="text-[10px] text-gray-600 mt-1 font-bold">
+                    Qtd: {item.quantity}
+                  </div>
                 </div>
               </div>
               <div className="flex items-center space-x-4 shrink-0">

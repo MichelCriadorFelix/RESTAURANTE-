@@ -430,8 +430,10 @@ export default function OrderDetails() {
                 <span class="notranslate" translate="no">${item.quantity}x ${item.product.name}</span>
                 ${!isKitchen ? `<span>${formatCurrency(item.totalPrice)}</span>` : ''}
               </div>
-              ${item.selectedOption ? `<div class="item-details">- Opção: ${item.selectedOption}</div>` : ''}
-              ${item.selectedSize ? `<div class="item-details">- Tamanho: ${item.selectedSize}</div>` : ''}
+              ${item.customizationSelections ? Object.entries(item.customizationSelections).map(([step, options]) => options.length > 0 ? `<div class="item-details">- ${step}: ${options.map(o => o.name).join(', ')}</div>` : '').join('') : ''}
+              ${item.notes ? `<div class="item-details">- Obs: ${item.notes}</div>` : ''}
+              ${!item.customizationSelections && item.selectedOption ? `<div class="item-details">- Opção: ${item.selectedOption}</div>` : ''}
+              ${!item.customizationSelections && item.selectedSize ? `<div class="item-details">- Tamanho: ${item.selectedSize}</div>` : ''}
               <div class="divider"></div>
             `).join('')}
           </div>
@@ -695,9 +697,23 @@ export default function OrderDetails() {
                     )}
                     <div className="flex-1 min-w-0">
                       <span className="font-bold text-sm text-gray-900 truncate block" translate="no">{item.quantity}x {item.product.name}</span>
-                      <p className="text-[10px] text-gray-500 uppercase font-bold tracking-widest mt-0.5">
-                        {item.selectedSize} {item.selectedOption && `• ${item.selectedOption}`}
-                      </p>
+                      
+                      {item.customizationSelections ? (
+                        <div className="text-[10px] text-gray-500 mt-1 space-y-0.5">
+                          {Object.entries(item.customizationSelections).map(([step, options]) => (
+                            options.length > 0 && (
+                              <div key={step}>
+                                <span className="font-bold">{step}:</span> {options.map(o => o.name).join(', ')}
+                              </div>
+                            )
+                          ))}
+                          {item.notes && <div className="italic break-words">Obs: {item.notes}</div>}
+                        </div>
+                      ) : (
+                        <p className="text-[10px] text-gray-500 uppercase font-bold tracking-widest mt-0.5">
+                          {item.selectedSize} {item.selectedOption && `• ${item.selectedOption}`}
+                        </p>
+                      )}
                     </div>
                   </div>
                   <span className="font-black text-sm shrink-0">{formatCurrency(item.totalPrice)}</span>
