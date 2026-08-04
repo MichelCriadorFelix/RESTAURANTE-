@@ -1,9 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { collection, query, onSnapshot, doc, updateDoc, deleteDoc, setDoc, addDoc } from 'firebase/firestore';
-import { db, sanitizeForFirestore, handleFirestoreError, OperationType, storage } from '../lib/firebase';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { db, sanitizeForFirestore, handleFirestoreError, OperationType } from '../lib/firebase';
 import { Product } from '../types';
-import { formatCurrency } from '../lib/utils';
+import { formatCurrency, compressImage } from '../lib/utils';
 import { Edit, Trash2, Plus, X, Check, AlertTriangle, AlertCircle, Search, Image as ImageIcon, UploadCloud } from 'lucide-react';
 import { initialMenu } from '../lib/seedData';
 import { AnimatePresence, motion } from 'framer-motion';
@@ -129,9 +128,7 @@ export default function AdminMenu() {
     
     try {
       if (imageFile) {
-        const imageRef = ref(storage, `products/${Date.now()}_${imageFile.name}`);
-        const snapshot = await uploadBytes(imageRef, imageFile);
-        imageUrl = await getDownloadURL(snapshot.ref);
+        imageUrl = await compressImage(imageFile, 800, 800, 0.7);
       }
 
       const updatedFormData = { ...formData, imageUrl };
