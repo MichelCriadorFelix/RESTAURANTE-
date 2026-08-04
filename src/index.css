@@ -1,0 +1,27 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --color-brand: #c2410c;
+  --color-brand-dark: #9a3412;
+  --color-dark: #1a1a1a;
+  --color-canvas: #fdfaf5;
+  --color-text-main: #2d2d2d;
+}
+
+/* Hide Vercel Toolbar and Speed Insights notifications */
+vercel-live-feedback, 
+.vercel-toolbar,
+#vercel-live-feedback,
+[data-vercel-toolbar],
+[id^="va-"],
+[class^="va-"],
+.va-overlay,
+#vercel-speed-insights-overlay,
+[data-vercel-speed-insights-toolbar] {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
