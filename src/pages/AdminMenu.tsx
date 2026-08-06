@@ -163,19 +163,20 @@ export default function AdminMenu() {
     }
   };
 
-  const [selectedCategory, setSelectedCategory] = useState<'all' | 'refeicao' | 'bebida' | 'unavailable'>('all');
+  const [selectedCategory, setSelectedCategory] = useState<string>('all');
+
+  const categories = Array.from(new Set(products.map(p => p.category))).filter(Boolean);
 
   const filteredProducts = products.filter(product => {
     const matchesSearch = 
       product.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-      product.description?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      product.category.toLowerCase().includes(searchQuery.toLowerCase());
+      (product.description && product.description.toLowerCase().includes(searchQuery.toLowerCase())) ||
+      (product.category && product.category.toLowerCase().includes(searchQuery.toLowerCase()));
 
     if (!matchesSearch) return false;
 
-    if (selectedCategory === 'refeicao') return product.category === 'refeicao';
-    if (selectedCategory === 'bebida') return product.category === 'bebida';
     if (selectedCategory === 'unavailable') return !product.available;
+    if (selectedCategory !== 'all') return product.category === selectedCategory;
 
     return true;
   });
@@ -238,27 +239,34 @@ export default function AdminMenu() {
             </div>
             <div>
               <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-1">Categoria</label>
-              <select value={formData.category} onChange={e => setFormData({...formData, category: e.target.value as any})} className="w-full px-3 py-2 border border-gray-200 bg-gray-50 rounded-lg text-sm focus:outline-none focus:ring-brand focus:border-brand">
-                <option value="refeicao">Refeição</option>
-                <option value="bebida">Bebida</option>
-              </select>
+              <input 
+                type="text" 
+                list="categories-list"
+                required
+                value={formData.category} 
+                onChange={e => setFormData({...formData, category: e.target.value})} 
+                placeholder="Ex: Refeição, Bebida, Sobremesa"
+                className="w-full px-3 py-2 border border-gray-200 bg-gray-50 rounded-lg text-sm focus:outline-none focus:ring-brand focus:border-brand" 
+              />
+              <datalist id="categories-list">
+                {categories.map(cat => (
+                  <option key={cat} value={cat} />
+                ))}
+              </datalist>
             </div>
             <div>
               <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-1">Preço Padrão (R$)</label>
               <input type="number" step="0.01" required value={formData.price} onChange={e => setFormData({...formData, price: parseFloat(e.target.value)})} className="w-full px-3 py-2 border border-gray-200 bg-gray-50 rounded-lg text-sm focus:outline-none focus:ring-brand focus:border-brand" />
             </div>
-            {formData.category === 'refeicao' && (
-              <>
-                <div>
-                  <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-1">Acompanhamentos (separados por vírgula)</label>
-                  <input type="text" value={formData.options?.join(', ') || ''} onChange={e => setFormData({...formData, options: e.target.value.split(',').map(s => s.trim()).filter(Boolean)})} placeholder="Ex: batata frita, legume, verdura" className="w-full px-3 py-2 border border-gray-200 bg-gray-50 rounded-lg text-sm focus:outline-none focus:ring-brand focus:border-brand" />
-                </div>
-                <div>
-                  <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-1">Preço Opção 2 Pedaços (Opcional, R$)</label>
-                  <input type="number" step="0.01" value={formData.priceOption2 !== undefined ? formData.priceOption2 : ''} onChange={e => setFormData({...formData, priceOption2: e.target.value ? parseFloat(e.target.value) : undefined})} className="w-full px-3 py-2 border border-gray-200 bg-gray-50 rounded-lg text-sm focus:outline-none focus:ring-brand focus:border-brand" />
-                </div>
-              </>
-            )}
+            {/* Customization options are shown for any category, or you can leave it always visible if they want to add options */}
+            <div>
+              <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-1">Acompanhamentos (separados por vírgula, opcional)</label>
+              <input type="text" value={formData.options?.join(', ') || ''} onChange={e => setFormData({...formData, options: e.target.value.split(',').map(s => s.trim()).filter(Boolean)})} placeholder="Ex: batata frita, legume, verdura" className="w-full px-3 py-2 border border-gray-200 bg-gray-50 rounded-lg text-sm focus:outline-none focus:ring-brand focus:border-brand" />
+            </div>
+            <div>
+              <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-1">Preço Opção 2 Pedaços (Opcional, R$)</label>
+              <input type="number" step="0.01" value={formData.priceOption2 !== undefined ? formData.priceOption2 : ''} onChange={e => setFormData({...formData, priceOption2: e.target.value ? parseFloat(e.target.value) : undefined})} className="w-full px-3 py-2 border border-gray-200 bg-gray-50 rounded-lg text-sm focus:outline-none focus:ring-brand focus:border-brand" />
+            </div>
             <div className="md:col-span-2 flex justify-end gap-2 mt-2">
               <button type="button" onClick={() => setIsFormOpen(false)} disabled={isUploading} className="px-4 py-2 border border-gray-200 text-gray-600 rounded-lg text-xs font-bold uppercase tracking-widest hover:bg-gray-50 disabled:opacity-50">Cancelar</button>
               <button type="submit" disabled={isUploading} className="px-4 py-2 bg-brand text-white rounded-lg text-xs font-bold uppercase tracking-widest hover:bg-brand-dark disabled:opacity-50 flex items-center gap-2">
@@ -310,26 +318,6 @@ export default function AdminMenu() {
               Todos ({products.length})
             </button>
             <button
-              onClick={() => setSelectedCategory('refeicao')}
-              className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider whitespace-nowrap transition-all ${
-                selectedCategory === 'refeicao'
-                  ? 'bg-brand text-white shadow-xs'
-                  : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-100'
-              }`}
-            >
-              Refeições ({products.filter(p => p.category === 'refeicao').length})
-            </button>
-            <button
-              onClick={() => setSelectedCategory('bebida')}
-              className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider whitespace-nowrap transition-all ${
-                selectedCategory === 'bebida'
-                  ? 'bg-brand text-white shadow-xs'
-                  : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-100'
-              }`}
-            >
-              Bebidas ({products.filter(p => p.category === 'bebida').length})
-            </button>
-            <button
               onClick={() => setSelectedCategory('unavailable')}
               className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider whitespace-nowrap transition-all ${
                 selectedCategory === 'unavailable'
@@ -339,6 +327,19 @@ export default function AdminMenu() {
             >
               Indisponíveis ({products.filter(p => !p.available).length})
             </button>
+            {categories.map(cat => (
+              <button
+                key={cat}
+                onClick={() => setSelectedCategory(cat)}
+                className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider whitespace-nowrap transition-all ${
+                  selectedCategory === cat
+                    ? 'bg-brand text-white shadow-xs'
+                    : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-100'
+                }`}
+              >
+                {cat} ({products.filter(p => p.category === cat).length})
+              </button>
+            ))}
           </div>
         </div>
 
@@ -363,7 +364,7 @@ export default function AdminMenu() {
                         {product.name}
                       </h3>
                       <span className="text-[9px] font-extrabold uppercase tracking-widest px-2 py-0.5 rounded bg-gray-100 text-gray-600 border border-gray-200/60">
-                        {product.category === 'refeicao' ? 'Refeição' : 'Bebida'}
+                        {product.category || 'Sem Categoria'}
                       </span>
                     </div>
                     {product.description && (
@@ -467,7 +468,7 @@ export default function AdminMenu() {
                       </div>
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap text-[10px] font-bold uppercase tracking-widest text-gray-500">
-                      {product.category === 'refeicao' ? 'Refeição' : 'Bebida'}
+                      {product.category || 'Sem Categoria'}
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap text-xs text-gray-900 font-black">
                       {formatCurrency(product.price)}
@@ -540,7 +541,7 @@ export default function AdminMenu() {
                     {productToDelete.name}
                   </h4>
                   <p className="text-[10px] text-red-800 font-bold uppercase tracking-wider mt-1">
-                    Categoria: {productToDelete.category === 'refeicao' ? 'Refeição' : 'Bebida'}
+                    Categoria: {productToDelete.category || 'Sem Categoria'}
                   </p>
                   <p className="text-[10px] text-red-900 font-black mt-0.5">
                     Preço: {formatCurrency(productToDelete.price)}
