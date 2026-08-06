@@ -51,7 +51,7 @@ export interface CartItem {
   product: Product;
   quantity: number;
   selectedOption?: string; // Legacy
-  selectedSize?: '1 pedaço' | '2 pedaços'; // Legacy
+  selectedSize?: '1 item' | '2 itens' | '1 pedaço' | '2 pedaços' | string; // Legacy
   customizationSelections?: { [stepTitle: string]: StepOption[] };
   notes?: string;
   totalPrice: number;

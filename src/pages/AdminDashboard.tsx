@@ -3,7 +3,7 @@ import { collection, query, orderBy, onSnapshot, where, doc, setDoc, limit } fro
 
 import { db, sanitizeForFirestore, handleFirestoreError, OperationType } from '../lib/firebase';
 import { Order, FinanceEntry, CompanyInfo } from '../types';
-import { formatCurrency } from '../lib/utils';
+import { formatCurrency, formatSizeLabel } from '../lib/utils';
 import { format, subDays } from 'date-fns';
 import { Link, useSearchParams } from 'react-router-dom';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
@@ -966,7 +966,9 @@ export default function AdminDashboard() {
                             {order.items.map((item, idx) => (
                               <div key={idx} className="text-[10px] text-gray-600 truncate max-w-xs">
                                 <strong className="text-gray-900">{item.quantity}x</strong> <span translate="no">{item.product.name}</span> 
-                                <span className="text-[9px] text-gray-400 ml-1">({item.selectedSize})</span>
+                                {item.selectedSize && (
+                                  <span className="text-[9px] text-gray-400 ml-1">({formatSizeLabel(item.selectedSize)})</span>
+                                )}
                               </div>
                             ))}
                             {order.notes && (

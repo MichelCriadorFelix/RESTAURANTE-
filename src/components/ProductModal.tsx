@@ -52,7 +52,7 @@ export function ProductModal({ product, onClose }: ProductModalProps) {
   const [selectedOption, setSelectedOption] = useState<string>(
     product.options && product.options.length > 0 ? 'Nenhum' : ''
   );
-  const [selectedSize, setSelectedSize] = useState<'1 pedaço' | '2 pedaços'>('1 pedaço');
+  const [selectedSize, setSelectedSize] = useState<'1 item' | '2 itens' | '1 pedaço' | '2 pedaços'>('1 item');
 
   const handleToggleOption = (stepTitle: string, option: StepOption, isRadio: boolean, maxLimit: number) => {
     setSelections(prev => {
@@ -75,7 +75,7 @@ export function ProductModal({ product, onClose }: ProductModalProps) {
 
   const calculateTotal = () => {
     let basePrice = product.price;
-    if (product.priceOption2 !== undefined && selectedSize === '2 pedaços') {
+    if (product.priceOption2 !== undefined && (selectedSize === '2 pedaços' || selectedSize === '2 itens')) {
       basePrice = product.priceOption2;
     }
 
@@ -105,8 +105,8 @@ export function ProductModal({ product, onClose }: ProductModalProps) {
     addItem({
       product,
       quantity,
-      selectedOption: customizationSteps ? undefined : selectedOption,
-      selectedSize: customizationSteps ? undefined : selectedSize,
+      selectedOption: customizationSteps ? undefined : (selectedOption !== 'Nenhum' ? selectedOption : undefined),
+      selectedSize: customizationSteps ? undefined : (product.priceOption2 !== undefined ? selectedSize : undefined),
       customizationSelections: customizationSteps ? selections : undefined,
       notes,
       totalPrice: calculateTotal()
@@ -161,15 +161,15 @@ export function ProductModal({ product, onClose }: ProductModalProps) {
 
           {!customizationSteps && product.priceOption2 !== undefined && (
             <div className="mt-6">
-              <h3 className="text-sm font-black text-gray-900 uppercase tracking-widest mb-3">Tamanho</h3>
+              <h3 className="text-sm font-black text-gray-900 uppercase tracking-widest mb-3">Opção</h3>
               <div className="flex gap-4">
                 <label className="flex items-center gap-2 cursor-pointer">
-                  <input type="radio" checked={selectedSize === '1 pedaço'} onChange={() => setSelectedSize('1 pedaço')} className="text-brand w-4 h-4" />
-                  <span className="text-sm font-medium">1 Pedaço</span>
+                  <input type="radio" checked={selectedSize === '1 item' || selectedSize === '1 pedaço'} onChange={() => setSelectedSize('1 item')} className="text-brand w-4 h-4" />
+                  <span className="text-sm font-medium">1 Item</span>
                 </label>
                 <label className="flex items-center gap-2 cursor-pointer">
-                  <input type="radio" checked={selectedSize === '2 pedaços'} onChange={() => setSelectedSize('2 pedaços')} className="text-brand w-4 h-4" />
-                  <span className="text-sm font-medium">2 Pedaços</span>
+                  <input type="radio" checked={selectedSize === '2 itens' || selectedSize === '2 pedaços'} onChange={() => setSelectedSize('2 itens')} className="text-brand w-4 h-4" />
+                  <span className="text-sm font-medium">2 Itens</span>
                 </label>
               </div>
             </div>

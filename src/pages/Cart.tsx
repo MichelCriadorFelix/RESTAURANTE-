@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
-import { formatCurrency, calculateDistance } from '../lib/utils';
+import { formatCurrency, calculateDistance, formatSizeLabel } from '../lib/utils';
 import { collection, addDoc, doc, onSnapshot } from 'firebase/firestore';
 import { db, sanitizeForFirestore } from '../lib/firebase';
 import { useNavigate } from 'react-router-dom';
@@ -273,10 +273,12 @@ export default function Cart() {
                       {item.notes && <div className="italic break-words">Obs: {item.notes}</div>}
                     </div>
                   ) : (
-                    <p className="text-[10px] text-gray-500 mt-1 uppercase tracking-widest font-bold">
-                      {item.selectedSize}
-                      {item.selectedOption && ` • ${item.selectedOption}`}
-                    </p>
+                    (item.selectedSize || (item.selectedOption && item.selectedOption !== 'Nenhum')) && (
+                      <p className="text-[10px] text-gray-500 mt-1 uppercase tracking-widest font-bold">
+                        {formatSizeLabel(item.selectedSize)}
+                        {item.selectedOption && item.selectedOption !== 'Nenhum' && ` • ${item.selectedOption}`}
+                      </p>
+                    )
                   )}
                   
                   <div className="text-[10px] text-gray-600 mt-1 font-bold">

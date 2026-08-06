@@ -633,7 +633,7 @@ export default function AdminMenu() {
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap text-xs text-gray-900 font-black">
                       {formatCurrency(product.price)}
-                      {product.priceOption2 && <span className="text-[9px] text-brand font-bold uppercase tracking-widest block mt-0.5">2 pedaços: {formatCurrency(product.priceOption2)}</span>}
+                      {product.priceOption2 && <span className="text-[9px] text-brand font-bold uppercase tracking-widest block mt-0.5">2 itens: {formatCurrency(product.priceOption2)}</span>}
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap">
                       <button 

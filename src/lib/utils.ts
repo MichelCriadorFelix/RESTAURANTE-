@@ -12,6 +12,13 @@ export function formatCurrency(value: number) {
   }).format(value);
 }
 
+export function formatSizeLabel(size?: string): string {
+  if (!size) return '';
+  if (size === '1 pedaço') return '1 item';
+  if (size === '2 pedaços') return '2 itens';
+  return size;
+}
+
 // Calculate distance in meters using Haversine formula
 export function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
   const R = 6371e3; // Earth radius in meters

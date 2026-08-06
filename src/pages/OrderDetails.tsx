@@ -5,7 +5,7 @@ import { doc, updateDoc, collection, query, orderBy, onSnapshot, addDoc } from '
 import { db } from '../lib/firebase';
 import { Order, ChatMessage, CompanyInfo } from '../types';
 import { useAuth } from '../context/AuthContext';
-import { formatCurrency } from '../lib/utils';
+import { formatCurrency, formatSizeLabel } from '../lib/utils';
 import { format } from 'date-fns';
 import { Send, Upload, Copy, Check, CreditCard, ChefHat, Truck, CheckCircle, XCircle, Clock, AlertCircle, Printer, ChevronLeft, Image as ImageIcon, ShoppingBag, UtensilsCrossed, Store } from 'lucide-react';
 import { playNotificationSound } from '../lib/audio';
@@ -483,8 +483,8 @@ export default function OrderDetails() {
               </div>
               ${item.customizationSelections ? Object.entries(item.customizationSelections).map(([step, options]) => options.length > 0 ? `<div class="item-details">- ${step}: ${options.map(o => o.name).join(', ')}</div>` : '').join('') : ''}
               ${item.notes ? `<div class="item-details">- Obs: ${item.notes}</div>` : ''}
-              ${!item.customizationSelections && item.selectedOption ? `<div class="item-details">- Opção: ${item.selectedOption}</div>` : ''}
-              ${!item.customizationSelections && item.selectedSize ? `<div class="item-details">- Tamanho: ${item.selectedSize}</div>` : ''}
+              ${!item.customizationSelections && item.selectedOption && item.selectedOption !== 'Nenhum' ? `<div class="item-details">- Opção: ${item.selectedOption}</div>` : ''}
+              ${!item.customizationSelections && item.selectedSize ? `<div class="item-details">- Opção: ${formatSizeLabel(item.selectedSize)}</div>` : ''}
               <div class="divider"></div>
             `).join('')}
           </div>
@@ -778,9 +778,11 @@ export default function OrderDetails() {
                           {item.notes && <div className="italic break-words">Obs: {item.notes}</div>}
                         </div>
                       ) : (
-                        <p className="text-[10px] text-gray-500 uppercase font-bold tracking-widest mt-0.5">
-                          {item.selectedSize} {item.selectedOption && `• ${item.selectedOption}`}
-                        </p>
+                        (item.selectedSize || (item.selectedOption && item.selectedOption !== 'Nenhum')) && (
+                          <p className="text-[10px] text-gray-500 uppercase font-bold tracking-widest mt-0.5">
+                            {formatSizeLabel(item.selectedSize)} {item.selectedOption && item.selectedOption !== 'Nenhum' && `• ${item.selectedOption}`}
+                          </p>
+                        )
                       )}
                     </div>
                   </div>

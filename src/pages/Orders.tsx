@@ -81,7 +81,7 @@ export default function Orders() {
           unavailable.push(item.product.name);
           continue;
         }
-        const unitPrice = (item.selectedSize === '2 pedaços' && current.priceOption2 !== undefined)
+        const unitPrice = ((item.selectedSize === '2 pedaços' || item.selectedSize === '2 itens') && current.priceOption2 !== undefined)
           ? current.priceOption2
           : current.price;
 
