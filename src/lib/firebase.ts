@@ -4,14 +4,20 @@ import { getAuth } from 'firebase/auth';
 import { getStorage } from 'firebase/storage';
 import firebaseConfigLocal from '../../firebase-applet-config.json';
 
+// Helper to safely clean environment variables (removes quotes and whitespace)
+const cleanEnv = (val?: string) => {
+  if (!val) return val;
+  return val.replace(/^["']|["']$/g, '').trim();
+};
+
 const firebaseConfig = {
-  apiKey: firebaseConfigLocal.apiKey,
-  authDomain: firebaseConfigLocal.authDomain,
-  projectId: firebaseConfigLocal.projectId,
-  storageBucket: firebaseConfigLocal.storageBucket,
-  messagingSenderId: firebaseConfigLocal.messagingSenderId,
-  appId: firebaseConfigLocal.appId,
-  firestoreDatabaseId: firebaseConfigLocal.firestoreDatabaseId || '(default)'
+  apiKey: cleanEnv(import.meta.env.VITE_FIREBASE_API_KEY) || firebaseConfigLocal.apiKey,
+  authDomain: cleanEnv(import.meta.env.VITE_FIREBASE_AUTH_DOMAIN) || firebaseConfigLocal.authDomain,
+  projectId: cleanEnv(import.meta.env.VITE_FIREBASE_PROJECT_ID) || firebaseConfigLocal.projectId,
+  storageBucket: cleanEnv(import.meta.env.VITE_FIREBASE_STORAGE_BUCKET) || firebaseConfigLocal.storageBucket,
+  messagingSenderId: cleanEnv(import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID) || firebaseConfigLocal.messagingSenderId,
+  appId: cleanEnv(import.meta.env.VITE_FIREBASE_APP_ID) || firebaseConfigLocal.appId,
+  firestoreDatabaseId: cleanEnv(import.meta.env.VITE_FIREBASE_DATABASE_ID) || firebaseConfigLocal.firestoreDatabaseId || '(default)'
 };
 
 export const app = initializeApp(firebaseConfig);
