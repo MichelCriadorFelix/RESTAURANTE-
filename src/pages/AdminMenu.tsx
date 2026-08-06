@@ -382,8 +382,11 @@ export default function AdminMenu() {
                           <input type="number" required min="0" value={step.min} onChange={e => handleUpdateStep(stepIndex, 'min', parseInt(e.target.value) || 0)} className="w-full px-2.5 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-brand" />
                         </div>
                         <div>
-                          <label className="block text-[9px] font-bold text-gray-500 uppercase tracking-widest mb-1">Máximo (Qtd)</label>
-                          <input type="number" required min="1" value={step.max} onChange={e => handleUpdateStep(stepIndex, 'max', parseInt(e.target.value) || 1)} className="w-full px-2.5 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-brand" />
+                          <label className="block text-[9px] font-bold text-gray-500 uppercase tracking-widest mb-1">Máximo (em branco = s/ limite)</label>
+                          <input type="number" min="0" value={step.max === 999 ? '' : step.max} onChange={e => {
+                            const val = e.target.value;
+                            handleUpdateStep(stepIndex, 'max', val === '' ? 999 : (parseInt(val) || 0));
+                          }} className="w-full px-2.5 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-brand" placeholder="Sem limite" />
                         </div>
                       </div>
 

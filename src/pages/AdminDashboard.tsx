@@ -311,7 +311,20 @@ export default function AdminDashboard() {
     if (e) e.preventDefault();
     setSavingSettings(true);
     try {
-      const dataToSave = sanitizeForFirestore(companyInfo);
+      const fullAddress = [
+        companyInfo.addressStreet && companyInfo.addressNumber ? `${companyInfo.addressStreet}, ${companyInfo.addressNumber}` : companyInfo.addressStreet,
+        companyInfo.addressComplement,
+        companyInfo.addressNeighborhood,
+        companyInfo.addressCity && companyInfo.addressState ? `${companyInfo.addressCity} - ${companyInfo.addressState}` : companyInfo.addressCity,
+        companyInfo.addressZip ? `CEP: ${companyInfo.addressZip}` : ''
+      ].filter(Boolean).join(' - ');
+
+      const updatedCompanyInfo = {
+        ...companyInfo,
+        address: fullAddress || companyInfo.address
+      };
+
+      const dataToSave = sanitizeForFirestore(updatedCompanyInfo);
       await setDoc(doc(db, 'settings', 'company_info'), dataToSave);
       setSettingsSavedSuccess(true);
       setTimeout(() => setSettingsSavedSuccess(false), 3000);
@@ -1212,14 +1225,99 @@ export default function AdminDashboard() {
               </div>
             </div>
 
-            <div>
-              <label className="block text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1.5">Endereço Completo</label>
+            <div className="space-y-4">
+              <label className="block text-[11px] font-black text-gray-800 uppercase tracking-widest mb-2 border-b border-gray-100 pb-1">Endereço do Estabelecimento</label>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1.5">CEP</label>
+                  <input
+                    type="text"
+                    required
+                    value={companyInfo.addressZip || ''}
+                    onChange={e => setCompanyInfo({ ...companyInfo, addressZip: e.target.value })}
+                    placeholder="Ex: 25570-162"
+                    className="w-full border border-gray-200 bg-gray-50 rounded-lg py-2 px-3 text-xs font-bold text-gray-800 focus:ring-brand focus:border-brand"
+                  />
+                </div>
+                <div className="sm:col-span-2">
+                  <label className="block text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1.5">Rua / Logradouro</label>
+                  <input
+                    type="text"
+                    required
+                    value={companyInfo.addressStreet || ''}
+                    onChange={e => setCompanyInfo({ ...companyInfo, addressStreet: e.target.value })}
+                    placeholder="Ex: Av. Euclídes da Cunha"
+                    className="w-full border border-gray-200 bg-gray-50 rounded-lg py-2 px-3 text-xs font-bold text-gray-800 focus:ring-brand focus:border-brand"
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                <div>
+                  <label className="block text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1.5">Número</label>
+                  <input
+                    type="text"
+                    required
+                    value={companyInfo.addressNumber || ''}
+                    onChange={e => setCompanyInfo({ ...companyInfo, addressNumber: e.target.value })}
+                    placeholder="Ex: 800"
+                    className="w-full border border-gray-200 bg-gray-50 rounded-lg py-2 px-3 text-xs font-bold text-gray-800 focus:ring-brand focus:border-brand"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1.5">Complemento</label>
+                  <input
+                    type="text"
+                    value={companyInfo.addressComplement || ''}
+                    onChange={e => setCompanyInfo({ ...companyInfo, addressComplement: e.target.value })}
+                    placeholder="Ex: Loja 1"
+                    className="w-full border border-gray-200 bg-gray-50 rounded-lg py-2 px-3 text-xs font-bold text-gray-800 focus:ring-brand focus:border-brand"
+                  />
+                </div>
+                <div className="col-span-2 sm:col-span-2">
+                  <label className="block text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1.5">Bairro</label>
+                  <input
+                    type="text"
+                    required
+                    value={companyInfo.addressNeighborhood || ''}
+                    onChange={e => setCompanyInfo({ ...companyInfo, addressNeighborhood: e.target.value })}
+                    placeholder="Ex: Vila São João"
+                    className="w-full border border-gray-200 bg-gray-50 rounded-lg py-2 px-3 text-xs font-bold text-gray-800 focus:ring-brand focus:border-brand"
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1.5">Cidade</label>
+                  <input
+                    type="text"
+                    required
+                    value={companyInfo.addressCity || ''}
+                    onChange={e => setCompanyInfo({ ...companyInfo, addressCity: e.target.value })}
+                    placeholder="Ex: São João de Meriti"
+                    className="w-full border border-gray-200 bg-gray-50 rounded-lg py-2 px-3 text-xs font-bold text-gray-800 focus:ring-brand focus:border-brand"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1.5">Estado</label>
+                  <input
+                    type="text"
+                    required
+                    value={companyInfo.addressState || ''}
+                    onChange={e => setCompanyInfo({ ...companyInfo, addressState: e.target.value })}
+                    placeholder="Ex: RJ"
+                    className="w-full border border-gray-200 bg-gray-50 rounded-lg py-2 px-3 text-xs font-bold text-gray-800 focus:ring-brand focus:border-brand"
+                  />
+                </div>
+              </div>
+            </div>
+            
+            <div className="border-t border-gray-100 pt-4 mt-4">
+              <label className="block text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1.5">Instagram do Estabelecimento</label>
               <input
-                type="text"
-                required
-                value={companyInfo.address}
-                onChange={e => setCompanyInfo({ ...companyInfo, address: e.target.value })}
-                placeholder="Ex: Avenida Prefeito José Amorim, Nº 500, São João de Meriti - RJ"
+                type="url"
+                value={companyInfo.instagramUrl || ''}
+                onChange={e => setCompanyInfo({ ...companyInfo, instagramUrl: e.target.value })}
+                placeholder="Ex: https://www.instagram.com/sensacaogourmetofc"
                 className="w-full border border-gray-200 bg-gray-50 rounded-lg py-2 px-3 text-xs font-bold text-gray-800 focus:ring-brand focus:border-brand"
               />
             </div>

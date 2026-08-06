@@ -105,9 +105,17 @@ export interface CompanyInfo {
   name: string;
   phone: string;
   address: string;
+  addressZip?: string;
+  addressStreet?: string;
+  addressNumber?: string;
+  addressComplement?: string;
+  addressNeighborhood?: string;
+  addressCity?: string;
+  addressState?: string;
   pixKey: string;
   pixKeyName: string;
   logoUrl?: string;
+  instagramUrl?: string;
   forceClosed?: boolean;
   openingHours?: {
     [key: string]: DayHours;

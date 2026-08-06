@@ -59,7 +59,7 @@ export function ProductModal({ product, onClose }: ProductModalProps) {
     for (const step of product.customizationSteps) {
       const currentSelections = selections[step.title] || [];
       if (currentSelections.length < step.min) return false;
-      if (currentSelections.length > step.max) return false;
+      if (step.max !== 999 && currentSelections.length > step.max) return false;
     }
     return true;
   };
@@ -139,12 +139,25 @@ export function ProductModal({ product, onClose }: ProductModalProps) {
               </div>
             </div>
           )}
-
-          {/* New Customization Steps */}
+              {/* New Customization Steps */}
           {product.customizationSteps?.map((step, idx) => {
             const currentSelections = selections[step.title] || [];
             const isRadio = step.max === 1;
-            const isFulfilled = currentSelections.length >= step.min && currentSelections.length <= step.max;
+            const isFulfilled = currentSelections.length >= step.min && (step.max === 999 || currentSelections.length <= step.max);
+            
+            let subtitle = '';
+            if (step.min > 0 && step.max === 999) subtitle = `Selecione mínimo ${step.min} opções`;
+            else if (step.min === 0 && step.max > 0 && step.max !== 999) subtitle = `Selecione até ${step.max} opção`;
+            else if (step.min === step.max) subtitle = `Selecione ${step.min} opções`;
+            else subtitle = `Selecione de ${step.min} a ${step.max} opções`;
+            
+            let badgeText = step.min > 0 ? 'Obrigatório' : 'Opcional';
+            let badgeClass = step.min > 0 ? 'bg-gray-800 text-white' : 'bg-gray-200 text-gray-600';
+            
+            if (isFulfilled && step.min > 0) {
+              badgeText = 'Concluído';
+              badgeClass = 'bg-green-500 text-white';
+            }
 
             return (
               <div key={idx} className="mt-8">
@@ -152,18 +165,18 @@ export function ProductModal({ product, onClose }: ProductModalProps) {
                   <div>
                     <h3 className="text-sm font-black text-gray-900 uppercase tracking-widest">{step.title}</h3>
                     <p className="text-[10px] text-gray-500 font-medium">
-                      Selecione {step.min === step.max ? step.min : `de ${step.min} a ${step.max}`} opções
+                      {subtitle}
                     </p>
                   </div>
-                  <span className={`text-[10px] uppercase font-black px-2 py-1 rounded-full ${step.min > 0 ? (isFulfilled ? 'bg-gray-800 text-white' : 'bg-gray-800 text-white') : 'bg-gray-200 text-gray-600'}`}>
-                    {step.min > 0 ? 'Obrigatório' : 'Opcional'}
+                  <span className={`text-[10px] uppercase font-black px-2 py-1 rounded-full ${badgeClass}`}>
+                    {badgeText}
                   </span>
                 </div>
                 
                 <div className="grid grid-cols-2 gap-2 mt-3">
                   {step.options.map((opt, oIdx) => {
                     const isSelected = currentSelections.some(s => s.name === opt.name);
-                    const isDisabled = !isSelected && currentSelections.length >= step.max && !isRadio;
+                    const isDisabled = !isSelected && step.max !== 999 && currentSelections.length >= step.max && !isRadio;
                     
                     return (
                       <label 

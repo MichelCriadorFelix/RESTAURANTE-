@@ -4,7 +4,7 @@ import { db } from '../lib/firebase';
 import { Product, CompanyInfo } from '../types';
 import { useCart } from '../context/CartContext';
 import { formatCurrency } from '../lib/utils';
-import { Plus, Check, X, ShoppingBag, HelpCircle, AlertCircle, Image as ImageIcon } from 'lucide-react';
+import { Plus, Check, X, ShoppingBag, HelpCircle, AlertCircle, Image as ImageIcon, MapPin, Clock, Info, Instagram, MessageCircle } from 'lucide-react';
 import { initialMenu } from '../lib/seedData';
 import { useAuth } from '../context/AuthContext';
 import { AnimatePresence, motion } from 'framer-motion';
@@ -164,9 +164,80 @@ export default function Home() {
         return null;
       })()}
 
-      <div className="mb-6 bg-brand/10 p-4 rounded-xl border border-brand/20">
-        <h1 className="text-xl font-black text-gray-900 mb-1 uppercase tracking-wider">Cardápio</h1>
-        <p className="text-[10px] text-gray-700 uppercase tracking-widest font-bold">Faça seu pedido online.</p>
+      <div className="mb-8 flex flex-col md:flex-row gap-4 items-start md:items-center justify-between bg-dark text-white p-4 rounded-2xl shadow-lg border border-gray-800">
+        <div className="flex items-center gap-4">
+          <div className="w-20 h-20 bg-brand rounded-xl overflow-hidden shrink-0 shadow-md border border-gray-700">
+            {companyInfo?.logoUrl ? (
+              <img src={companyInfo.logoUrl} alt="Logo" className="w-full h-full object-cover" />
+            ) : (
+              <div className="w-full h-full flex items-center justify-center bg-brand text-white font-black text-2xl">
+                {companyInfo?.name?.substring(0, 2).toUpperCase() || 'SG'}
+              </div>
+            )}
+          </div>
+          <div className="flex flex-col">
+            <div className="flex items-center gap-2 mb-1.5">
+              <h1 className="text-xl md:text-2xl font-black uppercase tracking-wider">{companyInfo?.name || 'Cardápio'}</h1>
+              {companyInfo && isStoreOpen(companyInfo).isOpen ? (
+                <span className="bg-white text-green-600 px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-widest flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></span>
+                  Aberto
+                </span>
+              ) : (
+                <span className="bg-gray-800 text-gray-400 px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-widest">
+                  Fechado
+                </span>
+              )}
+            </div>
+            
+            {companyInfo?.address && (
+              <a 
+                href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(companyInfo.address)}`} 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="flex items-start md:items-center gap-1.5 text-xs text-gray-300 hover:text-white transition-colors mb-1"
+              >
+                <MapPin size={12} className="shrink-0 mt-0.5 md:mt-0" />
+                <span className="line-clamp-2 md:line-clamp-1">{companyInfo.address}</span>
+              </a>
+            )}
+            
+            <div className="flex items-center gap-1.5 text-xs text-gray-400 font-medium">
+              <Clock size={12} />
+              <span>Entrega <strong>30 - 60min.</strong></span>
+            </div>
+          </div>
+        </div>
+        
+        <div className="flex flex-row md:flex-col items-center md:items-end gap-3 w-full md:w-auto mt-2 md:mt-0 justify-between md:justify-center">
+          <div className="flex items-center gap-2">
+            {companyInfo?.phone && (
+              <a 
+                href={`https://wa.me/55${companyInfo.phone.replace(/\D/g, '')}`} 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="w-8 h-8 rounded-lg border border-gray-700 flex items-center justify-center text-gray-300 hover:bg-gray-800 hover:text-white transition-all"
+              >
+                <MessageCircle size={16} />
+              </a>
+            )}
+            {companyInfo?.instagramUrl && (
+              <a 
+                href={companyInfo.instagramUrl} 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="w-8 h-8 rounded-lg border border-gray-700 flex items-center justify-center text-gray-300 hover:bg-gray-800 hover:text-white transition-all"
+              >
+                <Instagram size={16} />
+              </a>
+            )}
+          </div>
+          
+          <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-700 text-xs font-bold text-gray-300 hover:bg-gray-800 hover:text-white transition-all">
+            <Info size={14} />
+            <span>Informação</span>
+          </button>
+        </div>
       </div>
 
       {!loading && products.length > 0 && (
