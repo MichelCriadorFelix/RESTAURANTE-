@@ -4,23 +4,14 @@ import { getAuth } from 'firebase/auth';
 import { getStorage } from 'firebase/storage';
 import firebaseConfigLocal from '../../firebase-applet-config.json';
 
-// Helper to get clean trimmed key or fallback
-const getCleanVal = (envVal: string | undefined, fallbackVal: string): string => {
-  if (envVal && envVal.trim().length > 0) {
-    return envVal.trim();
-  }
-  return fallbackVal;
-};
-
-// Direct static references so Vite replaces import.meta.env.VITE_* during build
 const firebaseConfig = {
-  apiKey: getCleanVal(import.meta.env.VITE_FIREBASE_API_KEY, firebaseConfigLocal.apiKey),
-  authDomain: getCleanVal(import.meta.env.VITE_FIREBASE_AUTH_DOMAIN, firebaseConfigLocal.authDomain),
-  projectId: getCleanVal(import.meta.env.VITE_FIREBASE_PROJECT_ID, firebaseConfigLocal.projectId),
-  storageBucket: getCleanVal(import.meta.env.VITE_FIREBASE_STORAGE_BUCKET, firebaseConfigLocal.storageBucket),
-  messagingSenderId: getCleanVal(import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID, firebaseConfigLocal.messagingSenderId),
-  appId: getCleanVal(import.meta.env.VITE_FIREBASE_APP_ID, firebaseConfigLocal.appId),
-  firestoreDatabaseId: getCleanVal(import.meta.env.VITE_FIREBASE_DATABASE_ID, firebaseConfigLocal.firestoreDatabaseId || '(default)')
+  apiKey: firebaseConfigLocal.apiKey,
+  authDomain: firebaseConfigLocal.authDomain,
+  projectId: firebaseConfigLocal.projectId,
+  storageBucket: firebaseConfigLocal.storageBucket,
+  messagingSenderId: firebaseConfigLocal.messagingSenderId,
+  appId: firebaseConfigLocal.appId,
+  firestoreDatabaseId: firebaseConfigLocal.firestoreDatabaseId || '(default)'
 };
 
 export const app = initializeApp(firebaseConfig);
