@@ -87,8 +87,42 @@ export default function Cart() {
 
     setLoading(true);
 
-    const restaurantLat = -22.8654801;
-    const restaurantLng = -43.3012176;
+    let restaurantLat = companyInfo?.lat;
+    let restaurantLng = companyInfo?.lng;
+
+    if (!restaurantLat || !restaurantLng) {
+      if (companyInfo?.addressStreet && companyInfo?.addressCity) {
+        try {
+          const zipStr = companyInfo.addressZip || '';
+          const query = `${companyInfo.addressStreet} ${companyInfo.addressNumber || ''}, ${companyInfo.addressNeighborhood || ''}, ${companyInfo.addressCity}, ${zipStr}, Brasil`;
+          const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}`, {
+            headers: { 'User-Agent': 'Restaurante-App' }
+          });
+          const geodata = await res.json();
+          if (geodata && geodata.length > 0) {
+            restaurantLat = parseFloat(geodata[0].lat);
+            restaurantLng = parseFloat(geodata[0].lon);
+          } else if (zipStr) {
+            const fallbackRes = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(zipStr + ', Brasil')}`, {
+              headers: { 'User-Agent': 'Restaurante-App' }
+            });
+            const fallbackData = await fallbackRes.json();
+            if (fallbackData && fallbackData.length > 0) {
+              restaurantLat = parseFloat(fallbackData[0].lat);
+              restaurantLng = parseFloat(fallbackData[0].lon);
+            }
+          }
+        } catch (e) {
+          console.error("Geocoding store location failed", e);
+        }
+      }
+
+      if (!restaurantLat || !restaurantLng) {
+        // Fallback default coordinates for São João de Meriti - RJ (Av. Euclídes da Cunha, 800)
+        restaurantLat = -22.7937;
+        restaurantLng = -43.3670;
+      }
+    }
 
     let finalDeliveryFee = companyInfo?.deliveryFee || 0;
 

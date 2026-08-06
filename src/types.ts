@@ -112,6 +112,8 @@ export interface CompanyInfo {
   addressNeighborhood?: string;
   addressCity?: string;
   addressState?: string;
+  lat?: number;
+  lng?: number;
   pixKey: string;
   pixKeyName: string;
   logoUrl?: string;

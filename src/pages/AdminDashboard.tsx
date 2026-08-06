@@ -36,7 +36,10 @@ import {
   Check,
   Image as ImageIcon,
   Upload,
-  Trash2
+  Trash2,
+  Loader2,
+  CheckCircle2,
+  AlertCircle
 } from 'lucide-react';
 import { playNotificationSound } from '../lib/audio';
 import { DEFAULT_OPENING_HOURS, DAY_NAMES, DAYS_ORDER } from '../lib/openingHours';
@@ -87,6 +90,9 @@ export default function AdminDashboard() {
   const [savingSettings, setSavingSettings] = useState(false);
   const [settingsSavedSuccess, setSettingsSavedSuccess] = useState(false);
   
+  const [cepLoading, setCepLoading] = useState(false);
+  const [cepStatus, setCepStatus] = useState<{ type: 'idle' | 'loading' | 'success' | 'error', message: string }>({ type: 'idle', message: '' });
+
   const logoInputRef = useRef<HTMLInputElement>(null);
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const [logoError, setLogoError] = useState(false);
@@ -217,6 +223,16 @@ export default function AdminDashboard() {
           name: data.name || '',
           phone: data.phone || '',
           address: data.address || '',
+          addressZip: data.addressZip || '',
+          addressStreet: data.addressStreet || '',
+          addressNumber: data.addressNumber || '',
+          addressComplement: data.addressComplement || '',
+          addressNeighborhood: data.addressNeighborhood || '',
+          addressCity: data.addressCity || '',
+          addressState: data.addressState || '',
+          lat: data.lat,
+          lng: data.lng,
+          instagramUrl: data.instagramUrl || '',
           pixKey: data.pixKey || '',
           pixKeyName: data.pixKeyName || '',
           logoUrl: data.logoUrl,
@@ -307,6 +323,110 @@ export default function AdminDashboard() {
     };
   }, []);
 
+  const lookupCompanyCEP = async (cepDigits: string) => {
+    if (cepDigits.length !== 8) return;
+    setCepLoading(true);
+    setCepStatus({ type: 'loading', message: 'Buscando CEP...' });
+    try {
+      const response = await fetch(`https://viacep.com.br/ws/${cepDigits}/json/`);
+      const data = await response.json();
+
+      if (data.erro) {
+        setCepStatus({ type: 'error', message: 'CEP não encontrado no ViaCEP.' });
+        setCepLoading(false);
+        return;
+      }
+
+      const street = data.logradouro || '';
+      const neighborhood = data.bairro || '';
+      const city = data.localidade || '';
+      const state = data.uf || '';
+      const formattedZip = `${cepDigits.slice(0, 5)}-${cepDigits.slice(5)}`;
+
+      setCepStatus({ type: 'loading', message: 'CEP encontrado! Buscando localização para o raio...' });
+
+      // Geocode using OpenStreetMap
+      let lat: number | undefined;
+      let lng: number | undefined;
+
+      try {
+        const fullQuery = `${street}, ${neighborhood}, ${city} - ${state}, ${formattedZip}, Brasil`;
+        const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(fullQuery)}`, {
+          headers: { 'User-Agent': 'Restaurante-App' }
+        });
+        const geodata = await res.json();
+        if (geodata && geodata.length > 0) {
+          lat = parseFloat(geodata[0].lat);
+          lng = parseFloat(geodata[0].lon);
+        } else {
+          const fallbackRes = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(formattedZip + ', Brasil')}`, {
+            headers: { 'User-Agent': 'Restaurante-App' }
+          });
+          const fallbackData = await fallbackRes.json();
+          if (fallbackData && fallbackData.length > 0) {
+            lat = parseFloat(fallbackData[0].lat);
+            lng = parseFloat(fallbackData[0].lon);
+          }
+        }
+      } catch (e) {
+        console.error('Geocoding error:', e);
+      }
+
+      setCompanyInfo(prev => {
+        const updatedStreet = street || prev.addressStreet || '';
+        const updatedNeighborhood = neighborhood || prev.addressNeighborhood || '';
+        const updatedCity = city || prev.addressCity || '';
+        const updatedState = state || prev.addressState || '';
+        const updatedNumber = prev.addressNumber || '';
+
+        const fullAddress = [
+          updatedStreet && updatedNumber ? `${updatedStreet}, ${updatedNumber}` : updatedStreet,
+          prev.addressComplement,
+          updatedNeighborhood,
+          updatedCity && updatedState ? `${updatedCity} - ${updatedState}` : updatedCity,
+          `CEP: ${formattedZip}`
+        ].filter(Boolean).join(' - ');
+
+        return {
+          ...prev,
+          addressZip: formattedZip,
+          addressStreet: updatedStreet,
+          addressNeighborhood: updatedNeighborhood,
+          addressCity: updatedCity,
+          addressState: updatedState,
+          address: fullAddress,
+          lat: lat !== undefined ? lat : prev.lat,
+          lng: lng !== undefined ? lng : prev.lng,
+        };
+      });
+
+      if (lat && lng) {
+        setCepStatus({ type: 'success', message: 'Endereço e localização (GPS) identificados!' });
+      } else {
+        setCepStatus({ type: 'success', message: 'Endereço identificado e preenchido!' });
+      }
+    } catch (err) {
+      setCepStatus({ type: 'error', message: 'Erro ao buscar o CEP.' });
+    } finally {
+      setCepLoading(false);
+    }
+  };
+
+  const handleCompanyCepChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const rawValue = e.target.value;
+    const digits = rawValue.replace(/\D/g, '').slice(0, 8);
+    let formatted = digits;
+    if (digits.length > 5) {
+      formatted = `${digits.slice(0, 5)}-${digits.slice(5)}`;
+    }
+    setCompanyInfo(prev => ({ ...prev, addressZip: formatted }));
+    if (digits.length === 8) {
+      lookupCompanyCEP(digits);
+    } else {
+      setCepStatus({ type: 'idle', message: '' });
+    }
+  };
+
   const handleSaveSettings = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     setSavingSettings(true);
@@ -319,9 +439,40 @@ export default function AdminDashboard() {
         companyInfo.addressZip ? `CEP: ${companyInfo.addressZip}` : ''
       ].filter(Boolean).join(' - ');
 
+      let storeLat = companyInfo.lat;
+      let storeLng = companyInfo.lng;
+
+      if (!storeLat || !storeLng) {
+        try {
+          const zipToSearch = companyInfo.addressZip || '25570-162';
+          const queryStr = `${companyInfo.addressStreet || ''} ${companyInfo.addressNumber || ''}, ${companyInfo.addressNeighborhood || ''}, ${companyInfo.addressCity || ''}, ${zipToSearch}, Brasil`;
+          const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(queryStr)}`, {
+            headers: { 'User-Agent': 'Restaurante-App' }
+          });
+          const geodata = await res.json();
+          if (geodata && geodata.length > 0) {
+            storeLat = parseFloat(geodata[0].lat);
+            storeLng = parseFloat(geodata[0].lon);
+          } else {
+            const fallbackRes = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(zipToSearch + ', Brasil')}`, {
+              headers: { 'User-Agent': 'Restaurante-App' }
+            });
+            const fallbackData = await fallbackRes.json();
+            if (fallbackData && fallbackData.length > 0) {
+              storeLat = parseFloat(fallbackData[0].lat);
+              storeLng = parseFloat(fallbackData[0].lon);
+            }
+          }
+        } catch (e) {
+          console.error('Geocoding on save error:', e);
+        }
+      }
+
       const updatedCompanyInfo = {
         ...companyInfo,
-        address: fullAddress || companyInfo.address
+        address: fullAddress || companyInfo.address,
+        lat: storeLat,
+        lng: storeLng
       };
 
       const dataToSave = sanitizeForFirestore(updatedCompanyInfo);
@@ -1230,14 +1381,44 @@ export default function AdminDashboard() {
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div>
                   <label className="block text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1.5">CEP</label>
-                  <input
-                    type="text"
-                    required
-                    value={companyInfo.addressZip || ''}
-                    onChange={e => setCompanyInfo({ ...companyInfo, addressZip: e.target.value })}
-                    placeholder="Ex: 25570-162"
-                    className="w-full border border-gray-200 bg-gray-50 rounded-lg py-2 px-3 text-xs font-bold text-gray-800 focus:ring-brand focus:border-brand"
-                  />
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      required
+                      value={companyInfo.addressZip || ''}
+                      onChange={handleCompanyCepChange}
+                      placeholder="Ex: 25570-162"
+                      className="w-full border border-gray-200 bg-gray-50 rounded-lg py-2 px-3 text-xs font-bold text-gray-800 focus:ring-brand focus:border-brand"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const digits = (companyInfo.addressZip || '').replace(/\D/g, '');
+                        if (digits.length === 8) {
+                          lookupCompanyCEP(digits);
+                        } else {
+                          setCepStatus({ type: 'error', message: 'Digite um CEP com 8 números.' });
+                        }
+                      }}
+                      disabled={cepLoading}
+                      className="bg-brand hover:bg-brand/90 text-white px-3 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest shrink-0 transition-all flex items-center gap-1 cursor-pointer disabled:opacity-50"
+                    >
+                      {cepLoading ? <Loader2 size={12} className="animate-spin" /> : <Search size={12} />}
+                      <span>Buscar</span>
+                    </button>
+                  </div>
+                  {cepStatus.message && (
+                    <p className={`text-[10px] font-bold mt-1.5 flex items-center gap-1 ${
+                      cepStatus.type === 'error' ? 'text-red-500' :
+                      cepStatus.type === 'success' ? 'text-green-600' :
+                      'text-brand animate-pulse'
+                    }`}>
+                      {cepStatus.type === 'error' && <AlertCircle size={12} />}
+                      {cepStatus.type === 'success' && <CheckCircle2 size={12} />}
+                      {cepStatus.type === 'loading' && <Loader2 size={12} className="animate-spin" />}
+                      <span>{cepStatus.message}</span>
+                    </p>
+                  )}
                 </div>
                 <div className="sm:col-span-2">
                   <label className="block text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1.5">Rua / Logradouro</label>
