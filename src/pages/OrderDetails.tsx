@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { doc, updateDoc, collection, query, orderBy, onSnapshot, addDoc } from 'firebase/firestore';
 
 import { db } from '../lib/firebase';
-import { Order, ChatMessage } from '../types';
+import { Order, ChatMessage, CompanyInfo } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { formatCurrency } from '../lib/utils';
 import { format } from 'date-fns';
@@ -54,12 +54,14 @@ export default function OrderDetails() {
   const [copied, setCopied] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
-  const [companyInfo, setCompanyInfo] = useState({
+  const [companyInfo, setCompanyInfo] = useState<Partial<CompanyInfo>>({
     name: "SENSAÇÃO GOUMERT",
     phone: "21 99999-9999",
     address: "Avenida Prefeito José Amorim, Nº 500, Jardim Meriti, São João de Meriti - RJ",
     pixKey: "12.345.678/0001-90",
-    pixKeyName: "SENSAÇÃO GOUMERT Ltda"
+    pixKeyName: "SENSAÇÃO GOUMERT Ltda",
+    prepTimeEstimate: "Até 30 Minutos",
+    deliveryTimeEstimate: "30 - 60 Minutos"
   });
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -634,11 +636,11 @@ export default function OrderDetails() {
                   <div>
                     <h4 className="text-[10px] font-black uppercase tracking-widest text-gray-400">Tempo de Preparo</h4>
                     <p className={`text-xs font-black uppercase tracking-wider mt-0.5 ${order.status === 'preparing' ? 'text-blue-900' : 'text-gray-600'}`}>
-                      Até 30 Minutos
+                      {companyInfo?.prepTimeEstimate || 'Até 30 Minutos'}
                     </p>
                     <p className="text-[9px] font-semibold mt-1">
                       {order.status === 'preparing' 
-                        ? 'Seu pedido está sendo montado e frito na cozinha com todo capricho.' 
+                        ? 'Seu pedido está sendo montado e preparado na cozinha com todo capricho.' 
                         : 'Tempo estimado para preparo dos itens.'}
                     </p>
                   </div>
@@ -657,7 +659,7 @@ export default function OrderDetails() {
                   <div>
                     <h4 className="text-[10px] font-black uppercase tracking-widest text-gray-400">Tempo de Entrega</h4>
                     <p className={`text-xs font-black uppercase tracking-wider mt-0.5 ${order.status === 'delivering' ? 'text-purple-900' : 'text-gray-600'}`}>
-                      Até 20 Minutos
+                      {companyInfo?.deliveryTimeEstimate || '30 - 60 Minutos'}
                     </p>
                     <p className="text-[9px] font-semibold mt-1">
                       {order.status === 'delivering' 

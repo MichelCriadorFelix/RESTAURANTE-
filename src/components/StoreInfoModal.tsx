@@ -134,7 +134,7 @@ export const StoreInfoModal: React.FC<StoreInfoModalProps> = ({ isOpen, onClose,
 
               <div className="pl-8 text-xs text-gray-600 space-y-2">
                 <p className="font-bold text-gray-800">
-                  Tempo de entrega em casa: <span className="font-black text-gray-900">30 - 60min.</span>
+                  Tempo de entrega em casa: <span className="font-black text-gray-900">{companyInfo?.deliveryTimeEstimate || '30 - 60min.'}</span>
                 </p>
                 
                 <div>

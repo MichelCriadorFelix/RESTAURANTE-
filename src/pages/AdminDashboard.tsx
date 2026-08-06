@@ -1555,6 +1555,28 @@ export default function AdminDashboard() {
                   className="w-full border border-gray-200 bg-gray-50 rounded-lg py-2 px-3 text-xs font-bold text-gray-800 focus:ring-brand focus:border-brand"
                 />
               </div>
+
+              <div>
+                <label className="block text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1.5">Tempo Estimado de Preparo</label>
+                <input
+                  type="text"
+                  value={companyInfo.prepTimeEstimate || ''}
+                  onChange={e => setCompanyInfo({ ...companyInfo, prepTimeEstimate: e.target.value })}
+                  placeholder="Ex: Até 30 Minutos"
+                  className="w-full border border-gray-200 bg-gray-50 rounded-lg py-2 px-3 text-xs font-bold text-gray-800 focus:ring-brand focus:border-brand"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1.5">Tempo Estimado de Entrega</label>
+                <input
+                  type="text"
+                  value={companyInfo.deliveryTimeEstimate || ''}
+                  onChange={e => setCompanyInfo({ ...companyInfo, deliveryTimeEstimate: e.target.value })}
+                  placeholder="Ex: 30 - 60min."
+                  className="w-full border border-gray-200 bg-gray-50 rounded-lg py-2 px-3 text-xs font-bold text-gray-800 focus:ring-brand focus:border-brand"
+                />
+              </div>
             </div>
 
             {/* MANUAL OVERRIDE (FORCE CLOSED) */}

@@ -124,5 +124,7 @@ export interface CompanyInfo {
   };
   deliveryRadiusKm?: number;
   deliveryFee?: number;
+  prepTimeEstimate?: string;
+  deliveryTimeEstimate?: string;
 }
 
