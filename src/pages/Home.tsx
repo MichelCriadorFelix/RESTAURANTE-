@@ -11,11 +11,20 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { isStoreOpen } from '../lib/openingHours';
 import { ProductModal } from '../components/ProductModal';
 
+import { useNavigate } from 'react-router-dom';
+
 export default function Home() {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [companyInfo, setCompanyInfo] = useState<CompanyInfo | null>(null);
   const { user } = useAuth();
+  const navigate = useNavigate();
+  
+  useEffect(() => {
+    if (user?.role === 'admin') {
+      navigate('/admin');
+    }
+  }, [user, navigate]);
   
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
 

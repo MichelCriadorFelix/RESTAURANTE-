@@ -12,6 +12,7 @@ export default function AdminMenu() {
   const [searchQuery, setSearchQuery] = useState('');
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [isCreatingCategory, setIsCreatingCategory] = useState(false);
   const [formData, setFormData] = useState<Partial<Product>>({
     name: '',
     description: '',
@@ -94,6 +95,7 @@ export default function AdminMenu() {
   };
 
   const handleEdit = (product: Product) => {
+    setIsCreatingCategory(false);
     setFormData(product);
     setEditingId(product.id);
     setImageFile(null);
@@ -101,6 +103,7 @@ export default function AdminMenu() {
   };
 
   const handleAddNew = () => {
+    setIsCreatingCategory(false);
     setFormData({
       name: '',
       description: '',
@@ -288,21 +291,50 @@ export default function AdminMenu() {
               <input type="text" value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} className="w-full px-3 py-2 border border-gray-200 bg-gray-50 rounded-lg text-sm focus:outline-none focus:ring-brand focus:border-brand" />
             </div>
             <div>
-              <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-1">Categoria</label>
-              <input 
-                type="text" 
-                list="categories-list"
-                required
-                value={formData.category} 
-                onChange={e => setFormData({...formData, category: e.target.value})} 
-                placeholder="Ex: Refeição, Bebida, Sobremesa"
-                className="w-full px-3 py-2 border border-gray-200 bg-gray-50 rounded-lg text-sm focus:outline-none focus:ring-brand focus:border-brand" 
-              />
-              <datalist id="categories-list">
-                {categories.map(cat => (
-                  <option key={cat} value={cat} />
-                ))}
-              </datalist>
+              <div className="flex justify-between items-center mb-1">
+                <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-widest">Categoria</label>
+                {!isCreatingCategory && (
+                  <button type="button" onClick={() => { setIsCreatingCategory(true); setFormData({...formData, category: ''}); }} className="text-[9px] font-bold text-brand uppercase tracking-widest hover:underline">
+                    + Nova
+                  </button>
+                )}
+                {isCreatingCategory && (
+                  <button type="button" onClick={() => { setIsCreatingCategory(false); setFormData({...formData, category: categories[0] || ''}); }} className="text-[9px] font-bold text-gray-400 uppercase tracking-widest hover:underline">
+                    Cancelar
+                  </button>
+                )}
+              </div>
+              {isCreatingCategory ? (
+                <input 
+                  type="text" 
+                  required
+                  value={formData.category} 
+                  onChange={e => setFormData({...formData, category: e.target.value})} 
+                  placeholder="Nome da nova categoria"
+                  className="w-full px-3 py-2 border border-brand bg-brand/5 rounded-lg text-sm focus:outline-none focus:ring-brand focus:border-brand transition-colors" 
+                  autoFocus
+                />
+              ) : (
+                <select 
+                  required
+                  value={formData.category} 
+                  onChange={e => {
+                    if (e.target.value === 'NEW_CATEGORY') {
+                      setIsCreatingCategory(true);
+                      setFormData({...formData, category: ''});
+                    } else {
+                      setFormData({...formData, category: e.target.value});
+                    }
+                  }} 
+                  className="w-full px-3 py-2 border border-gray-200 bg-gray-50 rounded-lg text-sm focus:outline-none focus:ring-brand focus:border-brand appearance-none" 
+                >
+                  <option value="" disabled>Selecione uma categoria</option>
+                  {categories.map(cat => (
+                    <option key={cat} value={cat}>{cat}</option>
+                  ))}
+                  <option value="NEW_CATEGORY" className="font-bold text-brand">+ Criar nova categoria...</option>
+                </select>
+              )}
             </div>
             <div>
               <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-1">Preço Padrão (R$)</label>
