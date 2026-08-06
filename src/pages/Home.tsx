@@ -85,10 +85,41 @@ export default function Home() {
   };
 
   const availableProducts = products.filter(p => p.available);
-  const categories = Array.from(new Set(availableProducts.map(p => p.category)));
-  // Define a default order or just use the extracted ones.
-  // We'll sort them as they appear or alphabetically.
   
+  // Define a default order or just use the extracted ones.
+  const ORDERED_CATEGORIES = [
+    'MONTE SUA MASSA',
+    'STROGONOFF',
+    'BATATAS RECHEADAS',
+    'LASANHAS',
+    'MOQUECA',
+    'PRATOS EXTRA',
+    'PETISCOS',
+    'PASTÉIS',
+    'BEBIDAS'
+  ];
+
+  const uniqueCategories = Array.from(new Set(availableProducts.map(p => p.category)));
+  
+  // Sort categories according to the requested order
+  const categories = uniqueCategories.sort((a, b) => {
+    const idxA = ORDERED_CATEGORIES.indexOf(a.toUpperCase());
+    const idxB = ORDERED_CATEGORIES.indexOf(b.toUpperCase());
+    
+    if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+    if (idxA !== -1) return -1;
+    if (idxB !== -1) return 1;
+    return a.localeCompare(b);
+  });
+
+  const scrollToCategory = (categoryId: string) => {
+    const element = document.getElementById(`category-${categoryId}`);
+    if (element) {
+      const y = element.getBoundingClientRect().top + window.scrollY - 100;
+      window.scrollTo({ top: y, behavior: 'smooth' });
+    }
+  };
+
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       {/* Friendly Closed Alert Banner */}
@@ -116,6 +147,22 @@ export default function Home() {
         <p className="text-[10px] text-gray-700 uppercase tracking-widest font-bold">Faça seu pedido online.</p>
       </div>
 
+      {!loading && products.length > 0 && (
+        <div className="mb-8 overflow-x-auto pb-2 scrollbar-hide sticky top-0 z-10 bg-[#FAF9F6]/90 backdrop-blur-md pt-4 -mx-4 px-4 sm:mx-0 sm:px-0">
+          <div className="flex items-center gap-2 md:gap-4 min-w-max border-b border-gray-200/50 pb-2">
+            {categories.map(category => (
+              <button
+                key={category}
+                onClick={() => scrollToCategory(category)}
+                className="text-[10px] md:text-xs font-black text-gray-600 uppercase tracking-widest hover:text-brand transition-colors whitespace-nowrap px-2 py-1"
+              >
+                {category}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       {loading ? (
         <div className="text-center py-12 text-sm font-bold text-gray-500 uppercase tracking-widest">Carregando cardápio...</div>
       ) : products.length === 0 ? (
@@ -132,7 +179,7 @@ export default function Home() {
       ) : (
         <div className="space-y-8">
           {categories.map(category => (
-            <div key={category}>
+            <div key={category} id={`category-${category}`} className="scroll-mt-24">
               <h2 className="text-sm font-black text-gray-900 mb-4 uppercase tracking-widest">{category}</h2>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {availableProducts.filter(p => p.category === category).map(product => (

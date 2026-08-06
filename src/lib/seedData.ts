@@ -148,7 +148,7 @@ export const initialMenu: SeedProduct[] = [
     name: 'Monte seu Macarrão', 
     description: 'Aqui você é o chef, monte seu macarrão do seu jeito.', 
     price: 24, 
-    category: 'Monte seu Macarrão', 
+    category: 'Monte sua Massa', 
     available: true,
     customizationSteps: macarraoSteps
   },
@@ -156,7 +156,7 @@ export const initialMenu: SeedProduct[] = [
     name: 'Monte seu Nhoque Batata', 
     description: 'Aqui você é o chef, monte seu nhoque do seu jeito.', 
     price: 28, 
-    category: 'Monte seu Nhoque Batata', 
+    category: 'Monte sua Massa', 
     available: true,
     customizationSteps: nhoqueSteps
   },
@@ -164,7 +164,7 @@ export const initialMenu: SeedProduct[] = [
     name: 'Monte seu Risoto', 
     description: 'Aqui você é o chef, monte seu risoto do seu jeito.', 
     price: 24, 
-    category: 'Monte seu Risoto', 
+    category: 'Monte sua Massa', 
     available: true,
     customizationSteps: risotoSteps
   },
