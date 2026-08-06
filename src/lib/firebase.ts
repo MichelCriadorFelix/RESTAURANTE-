@@ -4,20 +4,29 @@ import { getAuth } from 'firebase/auth';
 import { getStorage } from 'firebase/storage';
 import firebaseConfigLocal from '../../firebase-applet-config.json';
 
-// Helper to safely clean environment variables (removes quotes and whitespace)
-const cleanEnv = (val?: string) => {
-  if (!val) return val;
-  return val.replace(/^["']|["']$/g, '').trim();
+const getValidConfig = (envVar: any, localValue: string, isApiKey = false) => {
+  if (typeof envVar === 'string' && envVar.trim().length > 0) {
+    const cleaned = envVar.replace(/^["']|["']$/g, '').trim();
+    if (isApiKey) {
+      // Firebase API keys always start with AIza
+      if (cleaned.startsWith('AIza')) {
+        return cleaned;
+      }
+      return localValue; // Fallback to local if env is invalid
+    }
+    return cleaned;
+  }
+  return localValue;
 };
 
 const firebaseConfig = {
-  apiKey: cleanEnv(import.meta.env.VITE_FIREBASE_API_KEY) || firebaseConfigLocal.apiKey,
-  authDomain: cleanEnv(import.meta.env.VITE_FIREBASE_AUTH_DOMAIN) || firebaseConfigLocal.authDomain,
-  projectId: cleanEnv(import.meta.env.VITE_FIREBASE_PROJECT_ID) || firebaseConfigLocal.projectId,
-  storageBucket: cleanEnv(import.meta.env.VITE_FIREBASE_STORAGE_BUCKET) || firebaseConfigLocal.storageBucket,
-  messagingSenderId: cleanEnv(import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID) || firebaseConfigLocal.messagingSenderId,
-  appId: cleanEnv(import.meta.env.VITE_FIREBASE_APP_ID) || firebaseConfigLocal.appId,
-  firestoreDatabaseId: cleanEnv(import.meta.env.VITE_FIREBASE_DATABASE_ID) || firebaseConfigLocal.firestoreDatabaseId || '(default)'
+  apiKey: getValidConfig(import.meta.env.VITE_FIREBASE_API_KEY, firebaseConfigLocal.apiKey, true),
+  authDomain: getValidConfig(import.meta.env.VITE_FIREBASE_AUTH_DOMAIN, firebaseConfigLocal.authDomain),
+  projectId: getValidConfig(import.meta.env.VITE_FIREBASE_PROJECT_ID, firebaseConfigLocal.projectId),
+  storageBucket: getValidConfig(import.meta.env.VITE_FIREBASE_STORAGE_BUCKET, firebaseConfigLocal.storageBucket),
+  messagingSenderId: getValidConfig(import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID, firebaseConfigLocal.messagingSenderId),
+  appId: getValidConfig(import.meta.env.VITE_FIREBASE_APP_ID, firebaseConfigLocal.appId),
+  firestoreDatabaseId: getValidConfig(import.meta.env.VITE_FIREBASE_DATABASE_ID, firebaseConfigLocal.firestoreDatabaseId || '(default)')
 };
 
 export const app = initializeApp(firebaseConfig);
