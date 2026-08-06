@@ -16,7 +16,7 @@ export default function AdminMenu() {
   const [formData, setFormData] = useState<Partial<Product>>({
     name: '',
     description: '',
-    category: 'refeicao',
+    category: '',
     price: 0,
     available: true,
   });
@@ -41,7 +41,13 @@ export default function AdminMenu() {
 
   useEffect(() => {
     const unsub = onSnapshot(collection(db, 'products'), (snapshot) => {
-      setProducts(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Product)));
+      setProducts(snapshot.docs.map(doc => {
+        const data = doc.data() as Product;
+        if (data.category && data.category.toUpperCase().startsWith('MONTE SEU ')) {
+          data.category = 'Monte sua Massa';
+        }
+        return { id: doc.id, ...data };
+      }));
     });
     return () => unsub();
   }, []);
@@ -107,7 +113,7 @@ export default function AdminMenu() {
     setFormData({
       name: '',
       description: '',
-      category: 'refeicao',
+      category: categories.length > 0 ? categories[0] : '',
       price: 0,
       priceOption2: undefined,
       options: [],

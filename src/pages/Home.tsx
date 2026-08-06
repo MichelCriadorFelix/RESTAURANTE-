@@ -68,7 +68,13 @@ export default function Home() {
 
   const fetchProducts = async () => {
     const querySnapshot = await getDocs(collection(db, 'products'));
-    const prods = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Product));
+    const prods = querySnapshot.docs.map(doc => {
+      const data = doc.data() as Product;
+      if (data.category && data.category.toUpperCase().startsWith('MONTE SEU ')) {
+        data.category = 'Monte sua Massa';
+      }
+      return { id: doc.id, ...data };
+    });
     setProducts(prods);
     setLoading(false);
   };
@@ -112,8 +118,15 @@ export default function Home() {
   
   // Sort categories according to the requested order
   const categories = uniqueCategories.sort((a, b) => {
-    const idxA = ORDERED_CATEGORIES.indexOf(a.toUpperCase());
-    const idxB = ORDERED_CATEGORIES.indexOf(b.toUpperCase());
+    let catA = a.toUpperCase();
+    let catB = b.toUpperCase();
+    
+    // Legacy mapping
+    if (catA.startsWith('MONTE SEU ')) catA = 'MONTE SUA MASSA';
+    if (catB.startsWith('MONTE SEU ')) catB = 'MONTE SUA MASSA';
+
+    const idxA = ORDERED_CATEGORIES.indexOf(catA);
+    const idxB = ORDERED_CATEGORIES.indexOf(catB);
     
     if (idxA !== -1 && idxB !== -1) return idxA - idxB;
     if (idxA !== -1) return -1;

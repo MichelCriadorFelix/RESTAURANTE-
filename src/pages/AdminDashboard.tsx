@@ -77,11 +77,11 @@ export default function AdminDashboard() {
   
   // Settings Form State
   const [companyInfo, setCompanyInfo] = useState<CompanyInfo>({
-    name: "Irmãos Pilar",
+    name: "SENSAÇÃO GOUMERT",
     phone: "21 99999-9999",
     address: "Avenida Prefeito José Amorim, Nº 500, Jardim Meriti, São João de Meriti - RJ",
     pixKey: "12.345.678/0001-90",
-    pixKeyName: "Irmãos Pilar Ltda",
+    pixKeyName: "SENSAÇÃO GOUMERT Ltda",
     openingHours: DEFAULT_OPENING_HOURS
   });
   const [savingSettings, setSavingSettings] = useState(false);
@@ -1194,7 +1194,7 @@ export default function AdminDashboard() {
                   required
                   value={companyInfo.name}
                   onChange={e => setCompanyInfo({ ...companyInfo, name: e.target.value })}
-                  placeholder="Ex: Irmãos Pilar Restaurante"
+                  placeholder="Ex: SENSAÇÃO GOUMERT Restaurante"
                   className="w-full border border-gray-200 bg-gray-50 rounded-lg py-2 px-3 text-xs font-bold text-gray-800 focus:ring-brand focus:border-brand"
                 />
               </div>
@@ -1244,7 +1244,7 @@ export default function AdminDashboard() {
                   required
                   value={companyInfo.pixKeyName}
                   onChange={e => setCompanyInfo({ ...companyInfo, pixKeyName: e.target.value })}
-                  placeholder="Ex: Irmãos Pilar de Meriti Ltda"
+                  placeholder="Ex: SENSAÇÃO GOUMERT de Meriti Ltda"
                   className="w-full border border-gray-200 bg-gray-50 rounded-lg py-2 px-3 text-xs font-bold text-gray-800 focus:ring-brand focus:border-brand"
                 />
               </div>

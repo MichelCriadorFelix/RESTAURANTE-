@@ -55,11 +55,11 @@ export default function OrderDetails() {
   const [uploading, setUploading] = useState(false);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [companyInfo, setCompanyInfo] = useState({
-    name: "Irmãos Pilar",
+    name: "SENSAÇÃO GOUMERT",
     phone: "21 99999-9999",
     address: "Avenida Prefeito José Amorim, Nº 500, Jardim Meriti, São João de Meriti - RJ",
     pixKey: "12.345.678/0001-90",
-    pixKeyName: "Irmãos Pilar Ltda"
+    pixKeyName: "SENSAÇÃO GOUMERT Ltda"
   });
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);

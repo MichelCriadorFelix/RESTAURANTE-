@@ -37,7 +37,7 @@ export default function Login() {
   const navigate = useNavigate();
 
   const [companyInfo, setCompanyInfo] = useState<{ name: string; logoUrl?: string }>({
-    name: "Irmãos Pilar"
+    name: "SENSAÇÃO GOUMERT"
   });
 
   useEffect(() => {
@@ -45,7 +45,7 @@ export default function Login() {
       if (snapshot.exists()) {
         const data = snapshot.data();
         setCompanyInfo({
-          name: data.name || "Irmãos Pilar",
+          name: data.name || "SENSAÇÃO GOUMERT",
           logoUrl: data.logoUrl
         });
       }
