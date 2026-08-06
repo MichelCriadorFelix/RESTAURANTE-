@@ -77,6 +77,10 @@ export default function Login() {
         message = 'O seu navegador bloqueou o pop-up do Google. Por favor, permita os pop-ups e tente novamente.';
       } else if (err.code === 'auth/network-request-failed') {
         message = 'Falha na conexão com a internet. Verifique sua rede e tente novamente.';
+      } else if (err.code === 'auth/unauthorized-domain') {
+        message = 'Este domínio não está autorizado no Firebase. Adicione-o na aba Authentication > Settings > Authorized domains do console do Firebase.';
+      } else {
+        message = `Erro: ${err.message || err.code || 'Desconhecido'}`;
       }
 
       setError(message);
