@@ -59,13 +59,18 @@ export interface CartItem {
 
 export type OrderStatus = 'pending_payment' | 'preparing' | 'delivering' | 'completed' | 'cancelled';
 
+export type ServiceType = 'delivery' | 'pickup' | 'dine_in';
+
 export interface Order {
   id: string;
   userId: string;
   userName: string;
+  userPhone?: string;
   items: CartItem[];
   total: number;
   deliveryFee?: number;
+  serviceType?: ServiceType;
+  tableNumber?: string;
   status: OrderStatus;
   paymentMethod: 'pix' | 'credit' | 'debit' | 'cash';
   receiptUrl?: string;

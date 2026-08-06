@@ -9,12 +9,26 @@ import { format } from 'date-fns';
 import { Link, useNavigate } from 'react-router-dom';
 import { RotateCcw } from 'lucide-react';
 
-const statusMap = {
-  pending_payment: 'Aguardando Pagamento',
-  preparing: 'Preparando',
-  delivering: 'Em Entrega',
-  completed: 'Concluído',
-  cancelled: 'Cancelado'
+const getStatusLabel = (status: Order['status'], serviceType?: string) => {
+  if (status === 'delivering') {
+    if (serviceType === 'pickup') return 'Pronto p/ Retirada';
+    if (serviceType === 'dine_in') return 'Servindo na Mesa';
+    return 'Em Entrega';
+  }
+  const statusMap: Record<string, string> = {
+    pending_payment: 'Aguardando Pagamento',
+    preparing: 'Preparando',
+    delivering: 'Em Entrega',
+    completed: 'Concluído',
+    cancelled: 'Cancelado'
+  };
+  return statusMap[status] || status;
+};
+
+const getServiceTypeLabel = (serviceType?: string) => {
+  if (serviceType === 'pickup') return 'Retirada';
+  if (serviceType === 'dine_in') return 'No Local';
+  return 'Delivery';
 };
 
 export default function Orders() {
@@ -121,8 +135,13 @@ export default function Orders() {
               <Link to={`/orders/${order.id}`} className="block p-5">
                 <div className="flex justify-between items-center mb-3">
                   <div>
-                    <span className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Pedido #{order.id.slice(-6).toUpperCase()}</span>
-                    <h3 className="text-sm font-bold text-gray-900 mt-0.5">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[9px] font-black uppercase tracking-wider text-brand bg-brand/10 px-1.5 py-0.5 rounded border border-brand/20">
+                        {getServiceTypeLabel(order.serviceType)}
+                      </span>
+                      <span className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Pedido #{order.id.slice(-6).toUpperCase()}</span>
+                    </div>
+                    <h3 className="text-sm font-bold text-gray-900 mt-1">
                       {format(new Date(order.createdAt), 'dd/MM/yyyy HH:mm')}
                     </h3>
                   </div>
@@ -134,7 +153,7 @@ export default function Orders() {
                       order.status === 'completed' ? 'bg-green-100 text-green-800' :
                       'bg-red-100 text-red-800'
                     }`}>
-                      {statusMap[order.status]}
+                      {getStatusLabel(order.status, order.serviceType)}
                     </span>
                     <div className="mt-1 font-black text-gray-900">{formatCurrency(order.total)}</div>
                   </div>

@@ -7,39 +7,70 @@ import { Order, ChatMessage, CompanyInfo } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { formatCurrency } from '../lib/utils';
 import { format } from 'date-fns';
-import { Send, Upload, Copy, Check, CreditCard, ChefHat, Truck, CheckCircle, XCircle, Clock, AlertCircle, Printer, ChevronLeft, Image as ImageIcon } from 'lucide-react';
+import { Send, Upload, Copy, Check, CreditCard, ChefHat, Truck, CheckCircle, XCircle, Clock, AlertCircle, Printer, ChevronLeft, Image as ImageIcon, ShoppingBag, UtensilsCrossed, Store } from 'lucide-react';
 import { playNotificationSound } from '../lib/audio';
 import { AnimatePresence, motion } from 'framer-motion';
 
-const statusMap = {
-  pending_payment: 'Aguardando Pagamento',
-  preparing: 'Preparando',
-  delivering: 'Em Entrega',
-  completed: 'Concluído',
-  cancelled: 'Cancelado'
+const getStatusLabel = (status: Order['status'], serviceType?: string) => {
+  if (status === 'delivering') {
+    if (serviceType === 'pickup') return 'Pronto p/ Retirada';
+    if (serviceType === 'dine_in') return 'Servindo na Mesa';
+    return 'Em Entrega';
+  }
+  const statusMap: Record<string, string> = {
+    pending_payment: 'Aguardando Pagamento',
+    preparing: 'Preparando',
+    delivering: 'Em Entrega',
+    completed: 'Concluído',
+    cancelled: 'Cancelado'
+  };
+  return statusMap[status] || status;
 };
 
 const getStepsForOrder = (order: Order | null) => {
   const method = order?.paymentMethod || 'pix';
+  const serviceType = order?.serviceType || 'delivery';
+
   let paymentLabel = 'Pagamento';
   let paymentDesc = 'Aguardando PIX';
   
   if (method === 'credit') {
     paymentLabel = 'Cartão';
-    paymentDesc = 'Crédito na Entrega';
+    paymentDesc = 'Crédito no local';
   } else if (method === 'debit') {
     paymentLabel = 'Cartão';
-    paymentDesc = 'Débito na Entrega';
+    paymentDesc = 'Débito no local';
   } else if (method === 'cash') {
     paymentLabel = 'Dinheiro';
-    paymentDesc = order?.changeRequested ? 'Dinheiro (c/ troco)' : 'Dinheiro na Entrega';
+    paymentDesc = order?.changeRequested ? 'Dinheiro (c/ troco)' : 'Dinheiro no local';
+  }
+
+  let step3Label = 'Entrega';
+  let step3Desc = 'A caminho';
+  let step3Icon = Truck;
+
+  let step4Label = 'Entregue';
+  let step4Desc = 'Bom apetite!';
+
+  if (serviceType === 'pickup') {
+    step3Label = 'Retirada';
+    step3Desc = 'Pronto p/ busca';
+    step3Icon = ShoppingBag;
+    step4Label = 'Concluído';
+    step4Desc = 'Retirado';
+  } else if (serviceType === 'dine_in') {
+    step3Label = 'Servindo';
+    step3Desc = 'Servido na mesa';
+    step3Icon = UtensilsCrossed;
+    step4Label = 'Concluído';
+    step4Desc = 'Bom apetite!';
   }
 
   return [
     { id: 'pending_payment', label: paymentLabel, desc: paymentDesc, icon: CreditCard },
     { id: 'preparing', label: 'Preparo', desc: 'Na cozinha', icon: ChefHat },
-    { id: 'delivering', label: 'Entrega', desc: 'A caminho', icon: Truck },
-    { id: 'completed', label: 'Entregue', desc: 'Bom apetite!', icon: CheckCircle }
+    { id: 'delivering', label: step3Label, desc: step3Desc, icon: step3Icon },
+    { id: 'completed', label: step4Label, desc: step4Desc, icon: CheckCircle }
   ];
 };
 
@@ -305,9 +336,15 @@ export default function OrderDetails() {
     // Prevent redundant clicks
     if (order.status === newStatus) return;
 
+    const step2Label = order.serviceType === 'pickup' 
+      ? 'Pronto para Retirada' 
+      : order.serviceType === 'dine_in' 
+      ? 'Pronto para Servir' 
+      : 'Saiu para Entrega';
+
     const statusLabels: Record<string, string> = {
       preparing: 'Aprovar e Preparar',
-      delivering: 'Marcar como Em Entrega',
+      delivering: `Marcar como "${step2Label}"`,
       completed: 'Marcar como Concluído',
       cancelled: 'Cancelar Pedido'
     };
@@ -324,11 +361,23 @@ export default function OrderDetails() {
       // Enviar mensagem automática amigável no chat
       let systemMessage = '';
       if (newStatus === 'preparing') {
-        systemMessage = '🍳 Seu pedido foi aprovado e já está em preparação na nossa cozinha! Nosso prazo de preparo é de até 30 minutos. Logo seu pedido sairá quentinho para você!';
+        systemMessage = `🍳 Seu pedido foi aprovado e já está em preparação na nossa cozinha! Nosso prazo de preparo é de ${companyInfo.prepTimeEstimate || 'até 30 minutos'}. Logo seu pedido estará pronto!`;
       } else if (newStatus === 'delivering') {
-        systemMessage = '🚀 Boas notícias! Seu pedido foi finalizado e já saiu para entrega. Nosso prazo de entrega é de até 20 minutos!';
+        if (order.serviceType === 'pickup') {
+          systemMessage = `🛍️ Boas notícias! Seu pedido está pronto para ser retirado na nossa loja no endereço: ${companyInfo.address || 'nosso estabelecimento'}. Esperamos por você!`;
+        } else if (order.serviceType === 'dine_in') {
+          systemMessage = `🍽️ Boas notícias! Seu pedido já ficou pronto e está sendo servido em sua mesa! Bom apetite!`;
+        } else {
+          systemMessage = `🚀 Boas notícias! Seu pedido foi finalizado e já saiu para entrega. Nosso prazo de entrega é de ${companyInfo.deliveryTimeEstimate || '30 - 60 Minutos'}!`;
+        }
       } else if (newStatus === 'completed') {
-        systemMessage = '🎉 Seu pedido foi entregue! Esperamos que aprecie cada pedaço. Muito obrigado pela preferência e bom apetite! 🍔🍟';
+        if (order.serviceType === 'pickup') {
+          systemMessage = '🎉 Pedido retirado no balcão com sucesso! Muito obrigado pela preferência e bom apetite! 🍔🍟';
+        } else if (order.serviceType === 'dine_in') {
+          systemMessage = '🎉 Esperamos que tenha uma ótima refeição! Muito obrigado pela preferência e bom apetite! 🍽️';
+        } else {
+          systemMessage = '🎉 Seu pedido foi entregue! Esperamos que aprecie cada pedaço. Muito obrigado pela preferência e bom apetite! 🍔🍟';
+        }
       } else if (newStatus === 'cancelled') {
         systemMessage = '⚠️ Seu pedido foi cancelado pelo estabelecimento. Caso tenha dúvidas ou precise de suporte, envie-nos uma mensagem por aqui.';
       }
@@ -345,7 +394,7 @@ export default function OrderDetails() {
       setAlert({
         type: 'success',
         message: 'Status atualizado',
-        submessage: `O pedido agora está: ${statusMap[newStatus]}`
+        submessage: `O pedido agora está: ${getStatusLabel(newStatus, order.serviceType)}`
       });
     } catch (err) {
       console.error('Erro ao atualizar status:', err);
@@ -553,18 +602,27 @@ export default function OrderDetails() {
                   </button>
                 )}
               </div>
-              <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">{format(new Date(order.createdAt), 'dd/MM/yyyy HH:mm')}</p>
-              {isAdmin && <p className="text-gray-900 mt-2 font-bold text-xs uppercase">Cliente: <span className="text-brand">{order.userName}</span></p>}
+              <div className="flex items-center gap-2 mt-1">
+                <span className="px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-wider bg-brand/10 text-brand border border-brand/20 flex items-center gap-1">
+                  {order.serviceType === 'pickup' ? (
+                    <><ShoppingBag size={11} /> Retirada no Local</>
+                  ) : order.serviceType === 'dine_in' ? (
+                    <><UtensilsCrossed size={11} /> Comer no Local {order.tableNumber ? `(${order.tableNumber})` : ''}</>
+                  ) : (
+                    <><Truck size={11} /> Delivery em Casa</>
+                  )}
+                </span>
+                <span className={`inline-block px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-widest ${
+                  order.status === 'pending_payment' ? 'bg-orange-100 text-orange-800' :
+                  order.status === 'preparing' ? 'bg-blue-100 text-blue-800' :
+                  order.status === 'delivering' ? 'bg-purple-100 text-purple-800' :
+                  order.status === 'completed' ? 'bg-green-100 text-green-800' :
+                  'bg-red-100 text-red-800'
+                }`}>
+                  {getStatusLabel(order.status, order.serviceType)}
+                </span>
+              </div>
             </div>
-            <span className={`inline-block px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-widest ${
-                    order.status === 'pending_payment' ? 'bg-orange-100 text-orange-800' :
-                    order.status === 'preparing' ? 'bg-blue-100 text-blue-800' :
-                    order.status === 'delivering' ? 'bg-purple-100 text-purple-800' :
-                    order.status === 'completed' ? 'bg-green-100 text-green-800' :
-                    'bg-red-100 text-red-800'
-                  }`}>
-              {statusMap[order.status]}
-            </span>
           </div>
 
           {/* Visual Order Progress Tracker / Stepper */}
@@ -654,17 +712,25 @@ export default function OrderDetails() {
                   <div className={`p-2 rounded-lg flex items-center justify-center ${
                     order.status === 'delivering' ? 'bg-purple-100 text-purple-600 animate-pulse' : 'bg-gray-100 text-gray-400'
                   }`}>
-                    <Truck size={18} />
+                    {order.serviceType === 'pickup' ? <ShoppingBag size={18} /> : order.serviceType === 'dine_in' ? <UtensilsCrossed size={18} /> : <Truck size={18} />}
                   </div>
                   <div>
-                    <h4 className="text-[10px] font-black uppercase tracking-widest text-gray-400">Tempo de Entrega</h4>
+                    <h4 className="text-[10px] font-black uppercase tracking-widest text-gray-400">
+                      {order.serviceType === 'pickup' ? 'Status de Retirada' : order.serviceType === 'dine_in' ? 'Status na Mesa' : 'Tempo de Entrega'}
+                    </h4>
                     <p className={`text-xs font-black uppercase tracking-wider mt-0.5 ${order.status === 'delivering' ? 'text-purple-900' : 'text-gray-600'}`}>
-                      {companyInfo?.deliveryTimeEstimate || '30 - 60 Minutos'}
+                      {order.serviceType === 'pickup' 
+                        ? (order.status === 'delivering' ? 'Pronto no Balcão' : 'Aguardando Preparo')
+                        : order.serviceType === 'dine_in'
+                        ? (order.status === 'delivering' ? 'Servindo na Mesa' : 'Aguardando Preparo')
+                        : (companyInfo?.deliveryTimeEstimate || '30 - 60 Minutos')}
                     </p>
                     <p className="text-[9px] font-semibold mt-1">
-                      {order.status === 'delivering' 
-                        ? 'O entregador já está a caminho com o seu pedido!' 
-                        : 'Tempo de trânsito estimado do motoboy.'}
+                      {order.serviceType === 'pickup' 
+                        ? (order.status === 'delivering' ? 'Seu pedido está pronto! Pode vir retirar no balcão.' : 'Aguarde o aviso de pedido pronto para busca.')
+                        : order.serviceType === 'dine_in'
+                        ? (order.status === 'delivering' ? 'Seu pedido já está sendo servido na sua mesa agora mesmo!' : 'Assim que pronto, será levado até sua mesa.')
+                        : (order.status === 'delivering' ? 'O entregador já está a caminho com o seu pedido!' : 'Tempo de trânsito estimado do motoboy.')}
                     </p>
                   </div>
                 </div>
@@ -800,7 +866,7 @@ export default function OrderDetails() {
                   disabled={uploading || order.status === 'delivering'}
                   className="bg-purple-600 text-white px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-widest hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  Saiu p/ Entrega
+                  {order.serviceType === 'pickup' ? 'Pronto p/ Retirada' : order.serviceType === 'dine_in' ? 'Pronto / Servir' : 'Saiu p/ Entrega'}
                 </button>
                 <button 
                   onClick={() => handleStatusChange('completed')} 

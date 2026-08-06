@@ -5,15 +5,17 @@ import { formatCurrency, calculateDistance } from '../lib/utils';
 import { collection, addDoc, doc, onSnapshot } from 'firebase/firestore';
 import { db, sanitizeForFirestore } from '../lib/firebase';
 import { useNavigate } from 'react-router-dom';
-import { Trash2, MapPin, Phone, User as UserIcon, Edit2, CreditCard, DollarSign, QrCode, MessageSquare, AlertCircle, Check, X, Image as ImageIcon } from 'lucide-react';
+import { Trash2, MapPin, Phone, User as UserIcon, Edit2, CreditCard, DollarSign, QrCode, MessageSquare, AlertCircle, Check, X, Image as ImageIcon, Truck, ShoppingBag, UtensilsCrossed, Store } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { CompanyInfo } from '../types';
+import { CompanyInfo, ServiceType } from '../types';
 import { isStoreOpen } from '../lib/openingHours';
 
 export default function Cart() {
   const { items, removeItem, total, clearCart } = useCart();
   const { user } = useAuth();
   const [address, setAddress] = useState(user?.address || '');
+  const [serviceType, setServiceType] = useState<ServiceType>('delivery');
+  const [tableNumber, setTableNumber] = useState('');
   const [loading, setLoading] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<'pix' | 'credit' | 'debit' | 'cash'>('pix');
   const [needChange, setNeedChange] = useState<boolean | null>(null);
@@ -46,7 +48,9 @@ export default function Cart() {
     }
   }, [alertState]);
 
-  const isProfileIncomplete = !user?.phone || !user?.address;
+  const isProfileIncomplete = serviceType === 'delivery' 
+    ? (!user?.phone || !user?.address)
+    : !user?.phone;
 
   // Keep address synchronized with user profile data when loaded/changed
   useEffect(() => {
@@ -73,7 +77,9 @@ export default function Cart() {
       setAlertState({
         type: 'warning',
         message: 'Dados Incompletos',
-        submessage: 'Preencha seus dados de contato e endereço antes de finalizar. Redirecionando...'
+        submessage: serviceType === 'delivery'
+          ? 'Preencha seus dados de contato e endereço antes de finalizar. Redirecionando...'
+          : 'Preencha seu telefone/WhatsApp no perfil antes de finalizar. Redirecionando...'
       });
       setTimeout(() => {
         navigate('/profile');
@@ -87,46 +93,36 @@ export default function Cart() {
 
     setLoading(true);
 
-    let restaurantLat = companyInfo?.lat;
-    let restaurantLng = companyInfo?.lng;
+    let finalDeliveryFee = serviceType === 'delivery' ? (companyInfo?.deliveryFee || 0) : 0;
 
-    if (!restaurantLat || !restaurantLng) {
-      if (companyInfo?.addressStreet && companyInfo?.addressCity) {
-        try {
-          const zipStr = companyInfo.addressZip || '';
-          const query = `${companyInfo.addressStreet} ${companyInfo.addressNumber || ''}, ${companyInfo.addressNeighborhood || ''}, ${companyInfo.addressCity}, ${zipStr}, Brasil`;
-          const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}`, {
-            headers: { 'User-Agent': 'Restaurante-App' }
-          });
-          const geodata = await res.json();
-          if (geodata && geodata.length > 0) {
-            restaurantLat = parseFloat(geodata[0].lat);
-            restaurantLng = parseFloat(geodata[0].lon);
-          } else if (zipStr) {
-            const fallbackRes = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(zipStr + ', Brasil')}`, {
+    // Execute distance calculation only for delivery orders
+    if (serviceType === 'delivery' && companyInfo?.deliveryRadiusKm) {
+      let restaurantLat = companyInfo?.lat;
+      let restaurantLng = companyInfo?.lng;
+
+      if (!restaurantLat || !restaurantLng) {
+        if (companyInfo?.addressStreet && companyInfo?.addressCity) {
+          try {
+            const zipStr = companyInfo.addressZip || '';
+            const query = `${companyInfo.addressStreet} ${companyInfo.addressNumber || ''}, ${companyInfo.addressNeighborhood || ''}, ${companyInfo.addressCity}, ${zipStr}, Brasil`;
+            const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}`, {
               headers: { 'User-Agent': 'Restaurante-App' }
             });
-            const fallbackData = await fallbackRes.json();
-            if (fallbackData && fallbackData.length > 0) {
-              restaurantLat = parseFloat(fallbackData[0].lat);
-              restaurantLng = parseFloat(fallbackData[0].lon);
+            const geodata = await res.json();
+            if (geodata && geodata.length > 0) {
+              restaurantLat = parseFloat(geodata[0].lat);
+              restaurantLng = parseFloat(geodata[0].lon);
             }
+          } catch (e) {
+            console.error("Geocoding store location failed", e);
           }
-        } catch (e) {
-          console.error("Geocoding store location failed", e);
+        }
+        if (!restaurantLat || !restaurantLng) {
+          restaurantLat = -22.7937;
+          restaurantLng = -43.3670;
         }
       }
 
-      if (!restaurantLat || !restaurantLng) {
-        // Fallback default coordinates for São João de Meriti - RJ (Av. Euclídes da Cunha, 800)
-        restaurantLat = -22.7937;
-        restaurantLng = -43.3670;
-      }
-    }
-
-    let finalDeliveryFee = companyInfo?.deliveryFee || 0;
-
-    if (companyInfo?.deliveryRadiusKm) {
       let userLat = user.lat;
       let userLng = user.lng;
 
@@ -141,33 +137,9 @@ export default function Cart() {
             if (geodata && geodata.length > 0) {
               userLat = parseFloat(geodata[0].lat);
               userLng = parseFloat(geodata[0].lon);
-            } else {
-              // Fallback to cep search if full address fails
-              const cepQuery = `${user.addressZip}, Brasil`;
-              const fallbackRes = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(cepQuery)}`, {
-                headers: { 'User-Agent': 'Restaurante-App' }
-              });
-              const fallbackData = await fallbackRes.json();
-              if (fallbackData && fallbackData.length > 0) {
-                userLat = parseFloat(fallbackData[0].lat);
-                userLng = parseFloat(fallbackData[0].lon);
-              }
             }
           } catch (e) {
             console.error("Geocoding on checkout failed", e);
-          }
-        } else if (user.address) {
-          try {
-            const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(user.address)}`, {
-              headers: { 'User-Agent': 'Restaurante-App' }
-            });
-            const geodata = await res.json();
-            if (geodata && geodata.length > 0) {
-              userLat = parseFloat(geodata[0].lat);
-              userLng = parseFloat(geodata[0].lon);
-            }
-          } catch (e) {
-            console.error("Geocoding fallback on checkout failed", e);
           }
         }
       }
@@ -183,14 +155,6 @@ export default function Cart() {
           setLoading(false);
           return;
         }
-      } else {
-        setAlertState({
-          type: 'error',
-          message: 'Endereço não localizado',
-          submessage: 'Não conseguimos calcular a distância para o seu endereço. Por favor, edite seu perfil e verifique se os dados estão corretos.'
-        });
-        setLoading(false);
-        return;
       }
     }
 
@@ -209,6 +173,12 @@ export default function Cart() {
     }
     
     try {
+      const orderAddressText = serviceType === 'delivery'
+        ? address
+        : serviceType === 'pickup'
+        ? `RETIRADA NO LOCAL (${companyInfo?.address || 'Estabelecimento'})`
+        : `COMER NO LOCAL${tableNumber.trim() ? ` - Mesa/Identificação: ${tableNumber.trim()}` : ''}`;
+
       const orderPayload = sanitizeForFirestore({
         userId: user.uid,
         userName: user.name,
@@ -216,11 +186,13 @@ export default function Cart() {
         items,
         total: finalTotal,
         deliveryFee: finalDeliveryFee,
+        serviceType,
+        tableNumber: serviceType === 'dine_in' ? (tableNumber.trim() || null) : null,
         status: 'pending_payment',
         paymentMethod,
         changeRequested: paymentMethod === 'cash' && needChange === true,
         changeFor: parsedChangeFor,
-        address,
+        address: orderAddressText,
         notes: notes.trim() || null,
         createdAt: Date.now(),
         updatedAt: Date.now()
@@ -329,23 +301,104 @@ export default function Cart() {
             <span className="text-gray-500 font-bold">Subtotal</span>
             <span className="font-black text-gray-900">{formatCurrency(total)}</span>
           </div>
-          {companyInfo?.deliveryFee != null && companyInfo.deliveryFee > 0 && (
-            <div className="flex justify-between items-center text-sm">
-              <span className="text-gray-500 font-bold">Taxa de Entrega</span>
-              <span className="font-black text-gray-900">{formatCurrency(companyInfo.deliveryFee)}</span>
-            </div>
-          )}
+          <div className="flex justify-between items-center text-sm">
+            <span className="text-gray-500 font-bold">Taxa de Entrega</span>
+            <span className="font-black text-gray-900">
+              {serviceType === 'delivery'
+                ? (companyInfo?.deliveryFee != null && companyInfo.deliveryFee > 0 ? formatCurrency(companyInfo.deliveryFee) : 'Grátis')
+                : 'Grátis'}
+            </span>
+          </div>
           <div className="flex justify-between items-center mt-2 pt-2 border-t border-gray-200">
             <span className="text-xs font-bold text-gray-500 uppercase tracking-widest">Total</span>
-            <span className="text-lg font-black text-brand">{formatCurrency(total + (companyInfo?.deliveryFee || 0))}</span>
+            <span className="text-lg font-black text-brand">
+              {formatCurrency(total + (serviceType === 'delivery' ? (companyInfo?.deliveryFee || 0) : 0))}
+            </span>
           </div>
         </div>
       </div>
 
+      {/* Tipo de Serviço */}
+      <div className="bg-white shadow-sm rounded-xl border border-gray-100 p-5 mb-6">
+        <h3 className="text-xs font-black text-gray-900 uppercase tracking-widest flex items-center gap-2 mb-4 border-b border-gray-50 pb-3">
+          <Store size={14} className="text-brand" /> Tipo de Serviço
+        </h3>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <button
+            type="button"
+            onClick={() => setServiceType('delivery')}
+            className={`p-3.5 rounded-xl border-2 flex flex-col items-center justify-center gap-1.5 transition-all cursor-pointer ${
+              serviceType === 'delivery'
+                ? 'border-brand bg-brand/5 text-brand shadow-sm shadow-brand/10'
+                : 'border-gray-100 hover:border-gray-200 text-gray-600 hover:bg-gray-50'
+            }`}
+          >
+            <Truck size={20} />
+            <span className="text-[10px] font-black uppercase tracking-wider text-center">Entrega em Casa</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setServiceType('pickup')}
+            className={`p-3.5 rounded-xl border-2 flex flex-col items-center justify-center gap-1.5 transition-all cursor-pointer ${
+              serviceType === 'pickup'
+                ? 'border-brand bg-brand/5 text-brand shadow-sm shadow-brand/10'
+                : 'border-gray-100 hover:border-gray-200 text-gray-600 hover:bg-gray-50'
+            }`}
+          >
+            <ShoppingBag size={20} />
+            <span className="text-[10px] font-black uppercase tracking-wider text-center">Retirada no Local</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setServiceType('dine_in')}
+            className={`p-3.5 rounded-xl border-2 flex flex-col items-center justify-center gap-1.5 transition-all cursor-pointer ${
+              serviceType === 'dine_in'
+                ? 'border-brand bg-brand/5 text-brand shadow-sm shadow-brand/10'
+                : 'border-gray-100 hover:border-gray-200 text-gray-600 hover:bg-gray-50'
+            }`}
+          >
+            <UtensilsCrossed size={20} />
+            <span className="text-[10px] font-black uppercase tracking-wider text-center">Comer no Local</span>
+          </button>
+        </div>
+
+        {serviceType === 'dine_in' && (
+          <div className="mt-4 p-3.5 bg-blue-50/70 rounded-xl border border-blue-100 text-xs space-y-2">
+            <p className="font-bold text-blue-900">🍽️ Consumo no Local / Mesa</p>
+            <p className="text-blue-800 text-[11px]">Seu pedido será preparado e servido para você na loja.</p>
+            <div>
+              <label className="block text-[9px] font-black text-blue-900 uppercase tracking-widest mb-1">
+                Número da Mesa ou Identificação
+              </label>
+              <input
+                type="text"
+                value={tableNumber}
+                onChange={(e) => setTableNumber(e.target.value)}
+                placeholder="Ex: Mesa 04, Balcão 2..."
+                className="w-full border border-blue-200 bg-white rounded-lg py-2 px-3 text-xs font-bold text-gray-800 focus:ring-brand focus:border-brand"
+              />
+            </div>
+          </div>
+        )}
+
+        {serviceType === 'pickup' && (
+          <div className="mt-4 p-3.5 bg-amber-50/70 rounded-xl border border-amber-200 text-xs space-y-1 text-amber-900">
+            <p className="font-bold">📍 Retirada no Local</p>
+            <p className="text-[11px] leading-relaxed">
+              Você buscará seu pedido diretamente no nosso balcão ({companyInfo?.address || 'no estabelecimento'}). Taxa de entrega gratuita!
+            </p>
+          </div>
+        )}
+      </div>
+
+      {/* Dados do Cliente / Endereço */}
       <div className="bg-white shadow-sm rounded-xl border border-gray-100 p-5 mb-6">
         <div className="flex justify-between items-center mb-4 border-b border-gray-50 pb-3">
           <h3 className="text-xs font-black text-gray-900 uppercase tracking-widest flex items-center gap-2">
-            <MapPin size={14} className="text-brand" /> Dados de Entrega
+            {serviceType === 'delivery' ? <MapPin size={14} className="text-brand" /> : <UserIcon size={14} className="text-brand" />} 
+            {serviceType === 'delivery' ? 'Dados de Entrega' : serviceType === 'pickup' ? 'Dados para Retirada' : 'Dados do Cliente'}
           </h3>
           {!isProfileIncomplete && (
             <button
@@ -359,12 +412,14 @@ export default function Cart() {
 
         {isProfileIncomplete ? (
           <div className="text-center py-4">
-            <p className="text-xs text-gray-500 font-bold uppercase tracking-widest mb-3">Endereço Incompleto</p>
+            <p className="text-xs text-gray-500 font-bold uppercase tracking-widest mb-3">
+              {serviceType === 'delivery' ? 'Endereço Incompleto' : 'Telefone/WhatsApp em Falta'}
+            </p>
             <button
               onClick={() => navigate('/profile')}
               className="bg-brand text-white px-5 py-2.5 rounded-lg text-[10px] font-black uppercase tracking-widest hover:bg-brand-dark transition-colors"
             >
-              Cadastrar Endereço de Entrega
+              Completar Dados do Perfil
             </button>
           </div>
         ) : (
@@ -372,7 +427,7 @@ export default function Cart() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs bg-gray-50 p-3.5 rounded-lg border border-gray-100">
               <div className="flex items-center gap-2 text-gray-700">
                 <UserIcon size={14} className="text-gray-400" />
-                <span className="font-semibold">Destinatário:</span>
+                <span className="font-semibold">Cliente:</span>
                 <span className="font-bold text-gray-900">{user?.name}</span>
               </div>
               <div className="flex items-center gap-2 text-gray-700">
@@ -382,45 +437,52 @@ export default function Cart() {
               </div>
             </div>
 
-            <div className="bg-gray-50/50 p-4 rounded-lg border border-gray-100 space-y-2 text-xs">
-              <div>
-                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-0.5">Endereço</span>
-                <p className="font-bold text-gray-800">
-                  {user?.addressStreet}, Nº {user?.addressNumber}
-                  {user?.addressComplement && ` - ${user?.addressComplement}`}
-                </p>
+            {serviceType === 'delivery' ? (
+              <div className="bg-gray-50/50 p-4 rounded-lg border border-gray-100 space-y-2 text-xs">
+                <div>
+                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-0.5">Endereço de Entrega</span>
+                  <p className="font-bold text-gray-800">
+                    {user?.addressStreet}, Nº {user?.addressNumber}
+                    {user?.addressComplement && ` - ${user?.addressComplement}`}
+                  </p>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-0.5">Bairro</span>
+                    <p className="font-semibold text-gray-700">{user?.addressNeighborhood}</p>
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-0.5">CEP</span>
+                    <p className="font-semibold text-gray-700 font-mono">{user?.addressZip}</p>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-0.5">Município</span>
+                    <p className="font-semibold text-gray-700">{user?.addressCity}</p>
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-0.5">Estado</span>
+                    <p className="font-semibold text-gray-700 uppercase">{user?.addressState}</p>
+                  </div>
+                </div>
+                {user?.addressReference && (
+                  <div>
+                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-0.5">Ponto de Referência</span>
+                    <p className="text-gray-600 font-medium italic">{user?.addressReference}</p>
+                  </div>
+                )}
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-0.5">Bairro</span>
-                  <p className="font-semibold text-gray-700">{user?.addressNeighborhood}</p>
-                </div>
-                <div>
-                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-0.5">CEP</span>
-                  <p className="font-semibold text-gray-700 font-mono">{user?.addressZip}</p>
-                </div>
+            ) : (
+              <div className="bg-gray-50/50 p-4 rounded-lg border border-gray-100 text-xs">
+                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-0.5">Local do Estabelecimento</span>
+                <p className="font-bold text-gray-800">{companyInfo?.address || 'Av. Euclídes da Cunha, 800 - Loja 1'}</p>
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-0.5">Município</span>
-                  <p className="font-semibold text-gray-700">{user?.addressCity}</p>
-                </div>
-                <div>
-                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-0.5">Estado</span>
-                  <p className="font-semibold text-gray-700 uppercase">{user?.addressState}</p>
-                </div>
-              </div>
-              {user?.addressReference && (
-                <div>
-                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-0.5">Ponto de Referência</span>
-                  <p className="text-gray-600 font-medium italic">{user?.addressReference}</p>
-                </div>
-              )}
-            </div>
+            )}
           </div>
         )}
 
-        </div>
+      </div>
 
       {/* Observações do Pedido */}
       <div className="bg-white shadow-sm rounded-xl border border-gray-100 p-5 mb-6">

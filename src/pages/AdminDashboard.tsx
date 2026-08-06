@@ -44,12 +44,26 @@ import {
 import { playNotificationSound } from '../lib/audio';
 import { DEFAULT_OPENING_HOURS, DAY_NAMES, DAYS_ORDER } from '../lib/openingHours';
 
-const statusMap = {
-  pending_payment: 'Aguardando PIX',
-  preparing: 'Preparando',
-  delivering: 'Em Entrega',
-  completed: 'Concluído',
-  cancelled: 'Cancelado'
+const getAdminStatusLabel = (status: Order['status'], serviceType?: string) => {
+  if (status === 'delivering') {
+    if (serviceType === 'pickup') return 'Pronto p/ Retirada';
+    if (serviceType === 'dine_in') return 'Servindo na Mesa';
+    return 'Em Entrega';
+  }
+  const statusMap: Record<string, string> = {
+    pending_payment: 'Aguardando PIX',
+    preparing: 'Preparando',
+    delivering: 'Em Entrega',
+    completed: 'Concluído',
+    cancelled: 'Cancelado'
+  };
+  return statusMap[status] || status;
+};
+
+const getAdminServiceTypeLabel = (serviceType?: string) => {
+  if (serviceType === 'pickup') return '🛍️ Retirada';
+  if (serviceType === 'dine_in') return '🍽️ No Local';
+  return '🚚 Delivery';
 };
 
 const statusColors = {
@@ -771,10 +785,13 @@ export default function AdminDashboard() {
                         <Utensils size={18} className="text-brand" />
                       </div>
                       <div>
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 flex-wrap">
                           <p className="text-xs font-black text-gray-900 uppercase">
                             {order.userName}
                           </p>
+                          <span className="text-[9px] font-black uppercase tracking-wider text-brand bg-brand/10 px-1.5 py-0.5 rounded border border-brand/20">
+                            {getAdminServiceTypeLabel(order.serviceType)}
+                          </span>
                           <span className="text-[10px] text-gray-400 font-bold uppercase">
                             #{order.id.slice(-6).toUpperCase()}
                           </span>
@@ -801,7 +818,7 @@ export default function AdminDashboard() {
 
                     <div className="flex sm:flex-col items-end justify-between sm:justify-center gap-1.5 border-t sm:border-0 pt-2 sm:pt-0 border-gray-50">
                       <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase border tracking-wider ${statusColors[order.status]}`}>
-                        {statusMap[order.status]}
+                        {getAdminStatusLabel(order.status, order.serviceType)}
                       </span>
                       <p className="font-black text-sm text-gray-900">{formatCurrency(order.total)}</p>
                     </div>
@@ -923,10 +940,15 @@ export default function AdminDashboard() {
                     {filteredHistoryOrders.map(order => (
                       <tr key={order.id} className="hover:bg-gray-50/60 transition-colors">
                         <td className="p-3 pl-4">
-                          <span className="font-black text-gray-950 uppercase block">
-                            #{order.id.slice(-6).toUpperCase()}
-                          </span>
-                          <span className="text-[9px] text-gray-400 font-bold block mt-0.5">
+                          <div className="flex items-center gap-1 mb-0.5">
+                            <span className="font-black text-gray-950 uppercase">
+                              #{order.id.slice(-6).toUpperCase()}
+                            </span>
+                            <span className="text-[8px] font-black uppercase tracking-wider text-brand bg-brand/10 px-1 py-0.2 rounded border border-brand/20">
+                              {getAdminServiceTypeLabel(order.serviceType)}
+                            </span>
+                          </div>
+                          <span className="text-[9px] text-gray-400 font-bold block">
                             {format(new Date(order.createdAt), 'dd/MM/yyyy HH:mm')}
                           </span>
                         </td>
@@ -966,7 +988,7 @@ export default function AdminDashboard() {
                         </td>
                         <td className="p-3">
                           <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase border tracking-wider ${statusColors[order.status]}`}>
-                            {statusMap[order.status]}
+                            {getAdminStatusLabel(order.status, order.serviceType)}
                           </span>
                         </td>
                         <td className="p-3 text-right pr-4 font-black text-gray-950">
