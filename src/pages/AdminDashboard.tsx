@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef, useMemo } from 'react';
 import { collection, query, orderBy, onSnapshot, where, doc, setDoc, limit } from 'firebase/firestore';
 
-import { db, storage, sanitizeForFirestore, handleFirestoreError, OperationType } from '../lib/firebase';
+import { db, sanitizeForFirestore, handleFirestoreError, OperationType } from '../lib/firebase';
 import { Order, FinanceEntry, CompanyInfo } from '../types';
 import { formatCurrency } from '../lib/utils';
 import { format, subDays } from 'date-fns';

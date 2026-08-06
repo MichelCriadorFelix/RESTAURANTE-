@@ -2,7 +2,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { doc, updateDoc, collection, query, orderBy, onSnapshot, addDoc } from 'firebase/firestore';
 
-import { db, storage } from '../lib/firebase';
+import { db } from '../lib/firebase';
 import { Order, ChatMessage } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { formatCurrency } from '../lib/utils';
