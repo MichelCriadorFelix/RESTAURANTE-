@@ -6,7 +6,7 @@ const macarraoSteps = [
   {
     title: 'Escolha sua Massa',
     min: 1,
-    max: 10,
+    max: 1,
     options: [
       { name: 'Penne' },
       { name: 'Espaguete' },
@@ -17,7 +17,7 @@ const macarraoSteps = [
   {
     title: 'Escolha o seu Molho',
     min: 1,
-    max: 10,
+    max: 2,
     options: [
       { name: 'Sugo' },
       { name: '4 Queijos' },
@@ -28,7 +28,7 @@ const macarraoSteps = [
   {
     title: 'Escolha os seus Adicionais',
     min: 1,
-    max: 20,
+    max: 8,
     options: [
       { name: 'Alho' }, { name: 'Cebola' }, { name: 'Pimentão' }, { name: 'Tomate' },
       { name: 'Palmito' }, { name: 'Azeitona' }, { name: 'Milho' }, { name: 'Ervilha' },
@@ -41,7 +41,7 @@ const macarraoSteps = [
   {
     title: 'Escolha sua Cobertura',
     min: 1,
-    max: 10,
+    max: 1,
     options: [
       { name: 'Orégano' },
       { name: 'Cheddar' },
@@ -55,9 +55,20 @@ const macarraoSteps = [
 
 const nhoqueSteps = [
   {
+    title: 'Escolha o seu Molho',
+    min: 1,
+    max: 2,
+    options: [
+      { name: 'Sugo' },
+      { name: '4 Queijos' },
+      { name: 'Parisiense / Branco' },
+      { name: 'Bolonhesa' }
+    ]
+  },
+  {
     title: 'Escolha os seus adicionais',
     min: 1,
-    max: 20,
+    max: 8,
     options: [
       { name: 'Alho' }, { name: 'Cebola' }, { name: 'Tomate' }, { name: 'Pimentão' },
       { name: 'Azeitona' }, { name: 'Milho' }, { name: 'Ervilha' }, { name: 'Passas' },
@@ -69,20 +80,9 @@ const nhoqueSteps = [
     ]
   },
   {
-    title: 'Escolha o seu Molho',
-    min: 1,
-    max: 10,
-    options: [
-      { name: 'Sugo' },
-      { name: '4 Queijos' },
-      { name: 'Parisiense / Branco' },
-      { name: 'Bolonhesa' }
-    ]
-  },
-  {
     title: 'Escolha sua Cobertura',
     min: 1,
-    max: 10,
+    max: 1,
     options: [
       { name: 'Orégano' },
       { name: 'Cheddar' },
@@ -97,7 +97,7 @@ const nhoqueSteps = [
 const risotoSteps = [
   {
     title: 'Escolha seu Risoto',
-    min: 0,
+    min: 1,
     max: 1,
     options: [
       { name: 'Frango' },
@@ -107,7 +107,7 @@ const risotoSteps = [
   {
     title: 'Escolha seu Molho',
     min: 1,
-    max: 10,
+    max: 2,
     options: [
       { name: 'Sugo' },
       { name: 'Parisiense' },
@@ -117,7 +117,7 @@ const risotoSteps = [
   {
     title: 'Escolha os seus adicionais',
     min: 1,
-    max: 20,
+    max: 8,
     options: [
       { name: 'Alho' }, { name: 'Cebola' }, { name: 'Tomate' }, { name: 'Pimentão' },
       { name: 'Azeitona' }, { name: 'Milho' }, { name: 'Ervilha' }, { name: 'Passas' },
@@ -131,7 +131,7 @@ const risotoSteps = [
   {
     title: 'Escolha sua Cobertura',
     min: 1,
-    max: 10,
+    max: 1,
     options: [
       { name: 'Orégano' },
       { name: 'Cheddar' },

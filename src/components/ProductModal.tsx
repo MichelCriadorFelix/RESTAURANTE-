@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { X, Check, ShoppingBag, Plus, Minus } from 'lucide-react';
-import { Product, CartItem, StepOption } from '../types';
+import { Product, CartItem, StepOption, CustomizationStep } from '../types';
 import { formatCurrency } from '../lib/utils';
 import { useCart } from '../context/CartContext';
 
@@ -10,11 +10,43 @@ interface ProductModalProps {
   onClose: () => void;
 }
 
+function getSanitizedCustomizationSteps(product: Product): CustomizationStep[] | undefined {
+  if (!product.customizationSteps || product.customizationSteps.length === 0) return undefined;
+
+  return product.customizationSteps.map(step => {
+    const titleUpper = (step.title || '').toUpperCase();
+    let min = step.min ?? 1;
+    let max = step.max;
+
+    if (titleUpper.includes('MASSA') || titleUpper.includes('RISOTO')) {
+      min = 1;
+      max = 1;
+    } else if (titleUpper.includes('MOLHO')) {
+      min = 1;
+      max = 2;
+    } else if (titleUpper.includes('ADICIONAL') || titleUpper.includes('ADICIONAI')) {
+      min = 1;
+      max = 8;
+    } else if (titleUpper.includes('COBERTURA')) {
+      min = 1;
+      max = 1;
+    }
+
+    return {
+      ...step,
+      min,
+      max: max ?? 999
+    };
+  });
+}
+
 export function ProductModal({ product, onClose }: ProductModalProps) {
   const { addItem } = useCart();
   const [quantity, setQuantity] = useState(1);
   const [selections, setSelections] = useState<{ [stepTitle: string]: StepOption[] }>({});
   const [notes, setNotes] = useState('');
+
+  const customizationSteps = getSanitizedCustomizationSteps(product);
 
   // Initial legacy state if needed
   const [selectedOption, setSelectedOption] = useState<string>(
@@ -22,10 +54,10 @@ export function ProductModal({ product, onClose }: ProductModalProps) {
   );
   const [selectedSize, setSelectedSize] = useState<'1 pedaço' | '2 pedaços'>('1 pedaço');
 
-  const handleToggleOption = (stepTitle: string, option: StepOption, isRadio: boolean) => {
+  const handleToggleOption = (stepTitle: string, option: StepOption, isRadio: boolean, maxLimit: number) => {
     setSelections(prev => {
       const current = prev[stepTitle] || [];
-      if (isRadio) {
+      if (isRadio || maxLimit === 1) {
         return { ...prev, [stepTitle]: [option] };
       }
       
@@ -33,6 +65,9 @@ export function ProductModal({ product, onClose }: ProductModalProps) {
       if (exists) {
         return { ...prev, [stepTitle]: current.filter(o => o.name !== option.name) };
       } else {
+        if (maxLimit !== 999 && current.length >= maxLimit) {
+          return prev; // Strictly enforce max selections limit
+        }
         return { ...prev, [stepTitle]: [...current, option] };
       }
     });
@@ -55,8 +90,8 @@ export function ProductModal({ product, onClose }: ProductModalProps) {
   };
 
   const canAddToCart = () => {
-    if (!product.customizationSteps) return true;
-    for (const step of product.customizationSteps) {
+    if (!customizationSteps) return true;
+    for (const step of customizationSteps) {
       const currentSelections = selections[step.title] || [];
       if (currentSelections.length < step.min) return false;
       if (step.max !== 999 && currentSelections.length > step.max) return false;
@@ -70,9 +105,9 @@ export function ProductModal({ product, onClose }: ProductModalProps) {
     addItem({
       product,
       quantity,
-      selectedOption: product.customizationSteps ? undefined : selectedOption,
-      selectedSize: product.customizationSteps ? undefined : selectedSize,
-      customizationSelections: product.customizationSteps ? selections : undefined,
+      selectedOption: customizationSteps ? undefined : selectedOption,
+      selectedSize: customizationSteps ? undefined : selectedSize,
+      customizationSelections: customizationSteps ? selections : undefined,
       notes,
       totalPrice: calculateTotal()
     });
@@ -110,7 +145,7 @@ export function ProductModal({ product, onClose }: ProductModalProps) {
           <div className="mt-3 text-lg font-black text-gray-900">{formatCurrency(product.price)}</div>
 
           {/* Legacy options rendering */}
-          {!product.customizationSteps && product.options && product.options.length > 0 && (
+          {!customizationSteps && product.options && product.options.length > 0 && (
             <div className="mt-6">
               <h3 className="text-sm font-black text-gray-900 uppercase tracking-widest mb-3">Acompanhamento</h3>
               <select 
@@ -124,7 +159,7 @@ export function ProductModal({ product, onClose }: ProductModalProps) {
             </div>
           )}
 
-          {!product.customizationSteps && product.priceOption2 !== undefined && (
+          {!customizationSteps && product.priceOption2 !== undefined && (
             <div className="mt-6">
               <h3 className="text-sm font-black text-gray-900 uppercase tracking-widest mb-3">Tamanho</h3>
               <div className="flex gap-4">
@@ -139,17 +174,23 @@ export function ProductModal({ product, onClose }: ProductModalProps) {
               </div>
             </div>
           )}
-              {/* New Customization Steps */}
-          {product.customizationSteps?.map((step, idx) => {
+
+          {/* New Customization Steps */}
+          {customizationSteps?.map((step, idx) => {
             const currentSelections = selections[step.title] || [];
             const isRadio = step.max === 1;
             const isFulfilled = currentSelections.length >= step.min && (step.max === 999 || currentSelections.length <= step.max);
             
             let subtitle = '';
-            if (step.min > 0 && step.max === 999) subtitle = `Selecione mínimo ${step.min} opções`;
-            else if (step.min === 0 && step.max > 0 && step.max !== 999) subtitle = `Selecione até ${step.max} opção`;
-            else if (step.min === step.max) subtitle = `Selecione ${step.min} opções`;
-            else subtitle = `Selecione de ${step.min} a ${step.max} opções`;
+            if (step.max === 1) {
+              subtitle = 'Selecione 1 opção';
+            } else if (step.max > 1 && step.max < 999) {
+              subtitle = `Selecione até ${step.max} opções (escolhidos: ${currentSelections.length}/${step.max})`;
+            } else if (step.min > 0) {
+              subtitle = `Selecione no mínimo ${step.min} opções`;
+            } else {
+              subtitle = `Opcional`;
+            }
             
             let badgeText = step.min > 0 ? 'Obrigatório' : 'Opcional';
             let badgeClass = step.min > 0 ? 'bg-gray-800 text-white' : 'bg-gray-200 text-gray-600';
@@ -181,25 +222,30 @@ export function ProductModal({ product, onClose }: ProductModalProps) {
                     return (
                       <label 
                         key={oIdx} 
-                        className={`flex items-center justify-between p-3 rounded-lg border-2 cursor-pointer transition-all ${
-                          isSelected ? 'border-brand bg-brand/5' : 'border-gray-200 hover:border-gray-300'
-                        } ${isDisabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+                        onClick={(e) => {
+                          if (isDisabled) {
+                            e.preventDefault();
+                          }
+                        }}
+                        className={`flex items-center justify-between p-3 rounded-lg border-2 transition-all ${
+                          isDisabled ? 'opacity-40 cursor-not-allowed bg-gray-50 border-gray-200' : 'cursor-pointer hover:border-gray-300'
+                        } ${isSelected ? 'border-brand bg-brand/5' : 'border-gray-200'}`}
                       >
                         <div className="flex items-center gap-3">
                           {isRadio ? (
                             <input 
                               type="radio" 
                               checked={isSelected} 
-                              onChange={() => !isDisabled && handleToggleOption(step.title, opt, true)} 
-                              className="text-brand focus:ring-brand w-4 h-4" 
+                              onChange={() => !isDisabled && handleToggleOption(step.title, opt, true, step.max)} 
+                              className="text-brand focus:ring-brand w-4 h-4 cursor-pointer disabled:cursor-not-allowed" 
                               disabled={isDisabled}
                             />
                           ) : (
                             <input 
                               type="checkbox" 
                               checked={isSelected} 
-                              onChange={() => !isDisabled && handleToggleOption(step.title, opt, false)} 
-                              className="text-brand focus:ring-brand w-4 h-4 rounded" 
+                              onChange={() => !isDisabled && handleToggleOption(step.title, opt, false, step.max)} 
+                              className="text-brand focus:ring-brand w-4 h-4 rounded cursor-pointer disabled:cursor-not-allowed" 
                               disabled={isDisabled}
                             />
                           )}
