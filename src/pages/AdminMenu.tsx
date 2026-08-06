@@ -121,6 +121,56 @@ export default function AdminMenu() {
     }
   };
 
+  const handleAddStep = () => {
+    setFormData(prev => ({
+      ...prev,
+      customizationSteps: [
+        ...(prev.customizationSteps || []),
+        { title: '', min: 0, max: 1, options: [] }
+      ]
+    }));
+  };
+
+  const handleUpdateStep = (index: number, field: string, value: any) => {
+    setFormData(prev => {
+      const newSteps = [...(prev.customizationSteps || [])];
+      newSteps[index] = { ...newSteps[index], [field]: value };
+      return { ...prev, customizationSteps: newSteps };
+    });
+  };
+
+  const handleRemoveStep = (index: number) => {
+    setFormData(prev => {
+      const newSteps = [...(prev.customizationSteps || [])];
+      newSteps.splice(index, 1);
+      return { ...prev, customizationSteps: newSteps };
+    });
+  };
+
+  const handleAddOptionToStep = (stepIndex: number) => {
+    setFormData(prev => {
+      const newSteps = [...(prev.customizationSteps || [])];
+      newSteps[stepIndex].options.push({ name: '', price: undefined });
+      return { ...prev, customizationSteps: newSteps };
+    });
+  };
+
+  const handleUpdateOptionInStep = (stepIndex: number, optionIndex: number, field: string, value: any) => {
+    setFormData(prev => {
+      const newSteps = [...(prev.customizationSteps || [])];
+      newSteps[stepIndex].options[optionIndex] = { ...newSteps[stepIndex].options[optionIndex], [field]: value };
+      return { ...prev, customizationSteps: newSteps };
+    });
+  };
+
+  const handleRemoveOptionFromStep = (stepIndex: number, optionIndex: number) => {
+    setFormData(prev => {
+      const newSteps = [...(prev.customizationSteps || [])];
+      newSteps[stepIndex].options.splice(optionIndex, 1);
+      return { ...prev, customizationSteps: newSteps };
+    });
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsUploading(true);
@@ -267,7 +317,77 @@ export default function AdminMenu() {
               <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-1">Preço Opção 2 Pedaços (Opcional, R$)</label>
               <input type="number" step="0.01" value={formData.priceOption2 !== undefined ? formData.priceOption2 : ''} onChange={e => setFormData({...formData, priceOption2: e.target.value ? parseFloat(e.target.value) : undefined})} className="w-full px-3 py-2 border border-gray-200 bg-gray-50 rounded-lg text-sm focus:outline-none focus:ring-brand focus:border-brand" />
             </div>
-            <div className="md:col-span-2 flex justify-end gap-2 mt-2">
+
+            <div className="md:col-span-2 border-t border-gray-100 pt-4 mt-2">
+              <div className="flex justify-between items-center mb-4">
+                <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-widest">Etapas de Personalização (Para produtos montados)</label>
+                <button type="button" onClick={handleAddStep} className="bg-gray-100 text-gray-600 px-3 py-1 rounded-md text-[10px] font-bold uppercase tracking-widest hover:bg-gray-200 transition-colors flex items-center gap-1">
+                  <Plus size={12} /> Adicionar Etapa
+                </button>
+              </div>
+
+              {formData.customizationSteps && formData.customizationSteps.length > 0 ? (
+                <div className="space-y-4">
+                  {formData.customizationSteps.map((step, stepIndex) => (
+                    <div key={stepIndex} className="p-4 border border-gray-200 rounded-xl bg-gray-50/50 relative group">
+                      <button type="button" onClick={() => handleRemoveStep(stepIndex)} className="absolute -top-2 -right-2 w-6 h-6 bg-red-100 text-red-600 rounded-full flex items-center justify-center shadow-sm opacity-0 group-hover:opacity-100 transition-opacity">
+                        <X size={14} />
+                      </button>
+                      
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
+                        <div className="sm:col-span-3">
+                          <label className="block text-[9px] font-bold text-gray-500 uppercase tracking-widest mb-1">Título da Etapa</label>
+                          <input type="text" required value={step.title} onChange={e => handleUpdateStep(stepIndex, 'title', e.target.value)} placeholder="Ex: Escolha sua carne" className="w-full px-2.5 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-brand" />
+                        </div>
+                        <div>
+                          <label className="block text-[9px] font-bold text-gray-500 uppercase tracking-widest mb-1">Mínimo (Qtd)</label>
+                          <input type="number" required min="0" value={step.min} onChange={e => handleUpdateStep(stepIndex, 'min', parseInt(e.target.value) || 0)} className="w-full px-2.5 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-brand" />
+                        </div>
+                        <div>
+                          <label className="block text-[9px] font-bold text-gray-500 uppercase tracking-widest mb-1">Máximo (Qtd)</label>
+                          <input type="number" required min="1" value={step.max} onChange={e => handleUpdateStep(stepIndex, 'max', parseInt(e.target.value) || 1)} className="w-full px-2.5 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-brand" />
+                        </div>
+                      </div>
+
+                      <div className="bg-white border border-gray-100 p-3 rounded-lg">
+                        <div className="flex justify-between items-center mb-2">
+                          <label className="block text-[9px] font-bold text-gray-500 uppercase tracking-widest">Opções desta Etapa</label>
+                          <button type="button" onClick={() => handleAddOptionToStep(stepIndex)} className="text-brand text-[9px] font-bold uppercase tracking-widest flex items-center gap-1 hover:underline">
+                            <Plus size={10} /> Nova Opção
+                          </button>
+                        </div>
+                        
+                        {step.options.length > 0 ? (
+                          <div className="space-y-2">
+                            {step.options.map((option, optionIndex) => (
+                              <div key={optionIndex} className="flex gap-2 items-start">
+                                <div className="flex-1">
+                                  <input type="text" required value={option.name} onChange={e => handleUpdateOptionInStep(stepIndex, optionIndex, 'name', e.target.value)} placeholder="Nome da opção" className="w-full px-2 py-1 border border-gray-200 rounded-md text-xs focus:outline-none focus:ring-1 focus:ring-brand" />
+                                </div>
+                                <div className="w-24">
+                                  <input type="number" step="0.01" value={option.price !== undefined ? option.price : ''} onChange={e => handleUpdateOptionInStep(stepIndex, optionIndex, 'price', e.target.value ? parseFloat(e.target.value) : undefined)} placeholder="R$ +0,00" className="w-full px-2 py-1 border border-gray-200 rounded-md text-xs focus:outline-none focus:ring-1 focus:ring-brand" />
+                                </div>
+                                <button type="button" onClick={() => handleRemoveOptionFromStep(stepIndex, optionIndex)} className="p-1.5 text-red-500 hover:bg-red-50 rounded-md mt-0.5">
+                                  <Trash2 size={12} />
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="text-[10px] text-gray-400 text-center py-2 italic">Nenhuma opção adicionada.</div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-4 text-[10px] text-gray-400 uppercase tracking-widest font-bold">
+                  Nenhuma etapa de personalização.
+                </div>
+              )}
+            </div>
+
+            <div className="md:col-span-2 flex justify-end gap-2 mt-4 pt-4 border-t border-gray-100">
               <button type="button" onClick={() => setIsFormOpen(false)} disabled={isUploading} className="px-4 py-2 border border-gray-200 text-gray-600 rounded-lg text-xs font-bold uppercase tracking-widest hover:bg-gray-50 disabled:opacity-50">Cancelar</button>
               <button type="submit" disabled={isUploading} className="px-4 py-2 bg-brand text-white rounded-lg text-xs font-bold uppercase tracking-widest hover:bg-brand-dark disabled:opacity-50 flex items-center gap-2">
                 {isUploading ? (
