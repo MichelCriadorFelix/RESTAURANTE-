@@ -10,6 +10,7 @@ import { useAuth } from '../context/AuthContext';
 import { AnimatePresence, motion } from 'framer-motion';
 import { isStoreOpen } from '../lib/openingHours';
 import { ProductModal } from '../components/ProductModal';
+import { StoreInfoModal } from '../components/StoreInfoModal';
 
 import { useNavigate } from 'react-router-dom';
 
@@ -17,6 +18,7 @@ export default function Home() {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [companyInfo, setCompanyInfo] = useState<CompanyInfo | null>(null);
+  const [showInfoModal, setShowInfoModal] = useState(false);
   const { user } = useAuth();
   const navigate = useNavigate();
   
@@ -233,7 +235,10 @@ export default function Home() {
             )}
           </div>
           
-          <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-700 text-xs font-bold text-gray-300 hover:bg-gray-800 hover:text-white transition-all">
+          <button 
+            onClick={() => setShowInfoModal(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-700 text-xs font-bold text-gray-300 hover:bg-gray-800 hover:text-white transition-all cursor-pointer"
+          >
             <Info size={14} />
             <span>Informação</span>
           </button>
@@ -293,6 +298,12 @@ export default function Home() {
           <ProductModal product={selectedProduct} onClose={() => setSelectedProduct(null)} />
         )}
       </AnimatePresence>
+
+      <StoreInfoModal 
+        isOpen={showInfoModal} 
+        onClose={() => setShowInfoModal(false)} 
+        companyInfo={companyInfo} 
+      />
 
       {/* Floating Animated Toast Alert */}
       <AnimatePresence>
