@@ -108,18 +108,25 @@ export default function Layout() {
     if (promptToUse) {
       console.log('PWA: Triggering native install prompt...');
       try {
-        promptToUse.prompt();
-        promptToUse.userChoice.then((choiceResult: any) => {
-          console.log(`PWA: User choice result: ${choiceResult.outcome}`);
-          if (choiceResult.outcome === 'accepted') {
-            setShowInstallBanner(false);
-            setDeferredPrompt(null);
-            (window as any).deferredPrompt = null;
-          }
-        });
+        await promptToUse.prompt();
+        const choiceResult = await promptToUse.userChoice;
+        console.log(`PWA: User choice result: ${choiceResult.outcome}`);
+        
+        if (choiceResult.outcome === 'accepted') {
+          console.log('PWA: User accepted the install prompt');
+        } else {
+          console.log('PWA: User dismissed the install prompt');
+        }
+        
+        // Clear the prompt since it can only be used once
+        setDeferredPrompt(null);
+        (window as any).deferredPrompt = null;
+        setShowInstallBanner(false);
       } catch (e) {
         console.error('PWA: Error triggering prompt:', e);
       }
+    } else if (isIos()) {
+      alert("No iOS (Safari): Toque no ícone de 'Compartilhar' (o quadrado com uma seta para cima) na barra inferior e selecione 'Adicionar à Tela de Início'.");
     }
   };
 
@@ -132,7 +139,8 @@ export default function Layout() {
     navigate('/login');
   };
 
-  const canInstall = !!deferredPrompt;
+  // The install button should only be visible if we have the native prompt or if it's iOS
+  const canInstall = !!deferredPrompt || isIos();
 
   return (
     <div className="flex flex-col min-h-[100dvh]">
