@@ -122,11 +122,16 @@ export default function Layout() {
         setDeferredPrompt(null);
         (window as any).deferredPrompt = null;
         setShowInstallBanner(false);
-      } catch (e) {
+      } catch (e: any) {
         console.error('PWA: Error triggering prompt:', e);
+        if (e.name === 'NotAllowedError') {
+          alert("O navegador bloqueou a instalação automática (possivelmente por estar em uma pré-visualização ou iframe). Abra o app em uma nova guia para instalar.");
+        }
       }
     } else if (isIos()) {
       alert("No iOS (Safari): Toque no ícone de 'Compartilhar' (o quadrado com uma seta para cima) na barra inferior e selecione 'Adicionar à Tela de Início'.");
+    } else {
+      alert("A instalação direta não está disponível neste momento. Tente abrir o aplicativo no Google Chrome fora do modo de pré-visualização.");
     }
   };
 
