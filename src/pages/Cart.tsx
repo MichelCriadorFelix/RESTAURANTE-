@@ -52,6 +52,20 @@ export default function Cart() {
     ? (!user?.phone || !user?.address)
     : !user?.phone;
 
+  const calculatedDeliveryFee = React.useMemo(() => {
+    if (serviceType !== 'delivery') return 0;
+    if (companyInfo?.neighborhoodFees && user?.addressNeighborhood) {
+      const userNeighborhood = user.addressNeighborhood.trim();
+      const match = companyInfo.neighborhoodFees.find(nh => 
+        nh.name.trim().localeCompare(userNeighborhood, 'pt-BR', { sensitivity: 'base' }) === 0
+      );
+      if (match) {
+        return match.fee;
+      }
+    }
+    return companyInfo?.deliveryFee || 0;
+  }, [serviceType, companyInfo, user?.addressNeighborhood]);
+
   // Keep address synchronized with user profile data when loaded/changed
   useEffect(() => {
     if (user?.address) {
@@ -93,7 +107,7 @@ export default function Cart() {
 
     setLoading(true);
 
-    let finalDeliveryFee = serviceType === 'delivery' ? (companyInfo?.deliveryFee || 0) : 0;
+    let finalDeliveryFee = calculatedDeliveryFee;
 
     // Execute distance calculation only for delivery orders
     if (serviceType === 'delivery' && companyInfo?.deliveryRadiusKm) {
@@ -307,14 +321,14 @@ export default function Cart() {
             <span className="text-gray-500 font-bold">Taxa de Entrega</span>
             <span className="font-black text-gray-900">
               {serviceType === 'delivery'
-                ? (companyInfo?.deliveryFee != null && companyInfo.deliveryFee > 0 ? formatCurrency(companyInfo.deliveryFee) : 'Grátis')
+                ? (calculatedDeliveryFee > 0 ? formatCurrency(calculatedDeliveryFee) : 'Grátis')
                 : 'Grátis'}
             </span>
           </div>
           <div className="flex justify-between items-center mt-2 pt-2 border-t border-gray-200">
             <span className="text-xs font-bold text-gray-500 uppercase tracking-widest">Total</span>
             <span className="text-lg font-black text-brand">
-              {formatCurrency(total + (serviceType === 'delivery' ? (companyInfo?.deliveryFee || 0) : 0))}
+              {formatCurrency(total + calculatedDeliveryFee)}
             </span>
           </div>
         </div>
@@ -639,9 +653,9 @@ export default function Cart() {
                     className="w-full pl-9 pr-3 py-2 border border-gray-200 focus:border-brand focus:ring-brand rounded-lg text-xs font-bold bg-white"
                   />
                 </div>
-                {changeFor && parseFloat(changeFor.replace(',', '.')) <= (total + (companyInfo?.deliveryFee || 0)) && (
+                {changeFor && parseFloat(changeFor.replace(',', '.')) <= (total + calculatedDeliveryFee) && (
                   <p className="text-[9px] text-red-500 font-bold uppercase tracking-wider">
-                    O valor para o troco deve ser maior que o total do pedido ({formatCurrency(total + (companyInfo?.deliveryFee || 0))}).
+                    O valor para o troco deve ser maior que o total do pedido ({formatCurrency(total + calculatedDeliveryFee)}).
                   </p>
                 )}
               </div>
@@ -676,7 +690,7 @@ export default function Cart() {
                   closedBlock ||
                   isProfileIncomplete || 
                   (paymentMethod === 'cash' && needChange === null) ||
-                  (paymentMethod === 'cash' && needChange === true && (!changeFor.trim() || parseFloat(changeFor.replace(',', '.')) <= (total + (companyInfo?.deliveryFee || 0))))
+                  (paymentMethod === 'cash' && needChange === true && (!changeFor.trim() || parseFloat(changeFor.replace(',', '.')) <= (total + calculatedDeliveryFee)))
                 }
                 className="w-full sm:w-auto bg-brand text-white px-8 py-3 rounded-lg font-bold text-xs uppercase tracking-widest disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm cursor-pointer"
               >

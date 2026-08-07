@@ -129,6 +129,7 @@ export interface CompanyInfo {
   };
   deliveryRadiusKm?: number;
   deliveryFee?: number;
+  neighborhoodFees?: { name: string; fee: number }[];
   prepTimeEstimate?: string;
   deliveryTimeEstimate?: string;
 }

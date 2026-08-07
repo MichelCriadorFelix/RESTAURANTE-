@@ -253,7 +253,30 @@ export default function AdminDashboard() {
           forceClosed: data.forceClosed || false,
           openingHours: data.openingHours || DEFAULT_OPENING_HOURS,
           deliveryRadiusKm: data.deliveryRadiusKm || 0,
-          deliveryFee: data.deliveryFee || 0
+          deliveryFee: data.deliveryFee || 0,
+          prepTimeEstimate: data.prepTimeEstimate || '',
+          deliveryTimeEstimate: data.deliveryTimeEstimate || '',
+          neighborhoodFees: data.neighborhoodFees || [
+            { name: "PRAÇA GIL", fee: 8 },
+            { name: "JARDIM SUMARÉ", fee: 8 },
+            { name: "AGOSTINHO PORTO", fee: 10 },
+            { name: "VILA ROSALI", fee: 10 },
+            { name: "SÃO JOÃO", fee: 10 },
+            { name: "PARQUE BARRETO", fee: 10 },
+            { name: "PARQUE LAFAIETE", fee: 10 },
+            { name: "VILA RUTH", fee: 5 },
+            { name: "JARDIM NOIA", fee: 5 },
+            { name: "RODO", fee: 5 },
+            { name: "VILA SAO JOAO", fee: 5 },
+            { name: "JARDIM PARAISO", fee: 5 },
+            { name: "PRAÇA DA BANDEIRA", fee: 8 },
+            { name: "METROPOLES", fee: 6 },
+            { name: "VILAR DOS TELES", fee: 6 },
+            { name: "JARDIM IRIS", fee: 7 },
+            { name: "JARDIM MERITI", fee: 7 },
+            { name: "JARDIM BOTANICO", fee: 6 },
+            { name: "OLAVO BILAC", fee: 10 }
+          ]
         });
       }
     }, (err) => {
@@ -1600,6 +1623,77 @@ export default function AdminDashboard() {
                   placeholder="Ex: 30 - 60min."
                   className="w-full border border-gray-200 bg-gray-50 rounded-lg py-2 px-3 text-xs font-bold text-gray-800 focus:ring-brand focus:border-brand"
                 />
+              </div>
+            </div>
+
+            {/* NEIGHBORHOOD DELIVERY FEES */}
+            <div className="border-t border-gray-100 pt-6 mt-6">
+              <div className="flex justify-between items-center mb-3">
+                <h4 className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Taxas de Entrega por Bairro</h4>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const currentFees = companyInfo.neighborhoodFees || [];
+                    setCompanyInfo({
+                      ...companyInfo,
+                      neighborhoodFees: [...currentFees, { name: '', fee: 0 }]
+                    });
+                  }}
+                  className="bg-brand/10 text-brand px-2 py-1 rounded text-[9px] font-bold uppercase tracking-widest hover:bg-brand/20 transition-colors"
+                >
+                  + Adicionar Bairro
+                </button>
+              </div>
+              <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider mb-4">Caso o cliente preencha um bairro listado aqui, a taxa de entrega dele será definida automaticamente com o valor correspondente.</p>
+              
+              <div className="space-y-2 max-h-60 overflow-y-auto pr-2">
+                {(companyInfo.neighborhoodFees || []).map((nh, idx) => (
+                  <div key={idx} className="flex items-center gap-2 bg-gray-50 p-2 rounded-lg border border-gray-100">
+                    <input
+                      type="text"
+                      placeholder="Nome do Bairro"
+                      value={nh.name}
+                      onChange={(e) => {
+                        const newFees = [...(companyInfo.neighborhoodFees || [])];
+                        newFees[idx].name = e.target.value;
+                        setCompanyInfo({ ...companyInfo, neighborhoodFees: newFees });
+                      }}
+                      className="flex-1 bg-white border border-gray-200 rounded py-1.5 px-2 text-[10px] font-bold text-gray-800 focus:ring-brand focus:border-brand"
+                    />
+                    <div className="flex items-center gap-1 bg-white border border-gray-200 rounded px-2">
+                      <span className="text-[10px] font-bold text-gray-500">R$</span>
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        placeholder="0.00"
+                        value={nh.fee === 0 && !nh.name ? '' : nh.fee}
+                        onChange={(e) => {
+                          const newFees = [...(companyInfo.neighborhoodFees || [])];
+                          newFees[idx].fee = Number(e.target.value);
+                          setCompanyInfo({ ...companyInfo, neighborhoodFees: newFees });
+                        }}
+                        className="w-16 bg-transparent border-none py-1.5 px-0 text-[10px] font-bold text-gray-800 focus:ring-0"
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const newFees = [...(companyInfo.neighborhoodFees || [])];
+                        newFees.splice(idx, 1);
+                        setCompanyInfo({ ...companyInfo, neighborhoodFees: newFees });
+                      }}
+                      className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                ))}
+                {(!companyInfo.neighborhoodFees || companyInfo.neighborhoodFees.length === 0) && (
+                  <div className="text-center py-4 bg-gray-50 rounded-lg border border-dashed border-gray-200">
+                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Nenhum bairro configurado</p>
+                  </div>
+                )}
               </div>
             </div>
 
