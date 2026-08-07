@@ -120,8 +120,6 @@ export default function Layout() {
       } catch (e) {
         console.error('PWA: Error triggering prompt:', e);
       }
-    } else {
-      alert("A instalação automática só é suportada pelo Chrome no Android ou Desktop. Em dispositivos Apple (iOS/Safari) ou dentro de janelas de pré-visualização, a instalação via botão é bloqueada pelo navegador. Nestes casos, use o menu Compartilhar > 'Adicionar à Tela de Início'.");
     }
   };
 
@@ -187,7 +185,7 @@ export default function Layout() {
         </div>
         
         <div className="flex items-center space-x-3">
-          {user && !isStandalone && (
+          {user && canInstall && !isStandalone && (
             <button 
               onClick={handleInstallClick} 
               className="flex items-center justify-center bg-brand/20 text-brand p-1.5 rounded-lg hover:bg-brand hover:text-white transition-colors" 
@@ -253,7 +251,7 @@ export default function Layout() {
         {/* Desktop Install / Logout footer */}
         {user && (
           <div className="p-4 border-t border-gray-800">
-            {!isStandalone && (
+            {canInstall && !isStandalone && (
               <button 
                 onClick={handleInstallClick}
                 className="w-full flex items-center justify-center space-x-2 px-3 py-2.5 bg-brand/10 text-brand rounded-lg hover:bg-brand hover:text-white transition-colors text-xs font-bold uppercase tracking-widest mb-3"
