@@ -35,6 +35,7 @@ export default function Layout() {
   const [deferredPrompt, setDeferredPrompt] = useState<any>(() => (window as any).deferredPrompt || null);
   const [isStandalone, setIsStandalone] = useState(false);
   const [showInstallBanner, setShowInstallBanner] = useState(true);
+  const [manualInstallPlatform, setManualInstallPlatform] = useState<'ios' | 'desktop' | 'android' | null>(null);
   const [logoError, setLogoError] = useState(false);
   const [companyInfo, setCompanyInfo] = useState<{ name: string; logoUrl?: string }>({
     name: "SENSAÇÃO GOUMERT"
@@ -102,6 +103,16 @@ export default function Layout() {
     return /iphone|ipad|ipod/.test(userAgent);
   };
 
+  const openManualInstallGuide = () => {
+    if (isIos()) {
+      setManualInstallPlatform('ios');
+    } else if (/android/i.test(navigator.userAgent)) {
+      setManualInstallPlatform('android');
+    } else {
+      setManualInstallPlatform('desktop');
+    }
+  };
+
   const handleInstallClick = async () => {
     const promptToUse = deferredPrompt || (window as any).deferredPrompt;
 
@@ -124,14 +135,10 @@ export default function Layout() {
         setShowInstallBanner(false);
       } catch (e: any) {
         console.error('PWA: Error triggering prompt:', e);
-        if (e.name === 'NotAllowedError') {
-          alert("O navegador bloqueou a instalação automática (possivelmente por estar em uma pré-visualização ou iframe). Abra o app em uma nova guia para instalar.");
-        }
+        openManualInstallGuide();
       }
-    } else if (isIos()) {
-      alert("No iOS (Safari): Toque no ícone de 'Compartilhar' (o quadrado com uma seta para cima) na barra inferior e selecione 'Adicionar à Tela de Início'.");
     } else {
-      alert("A instalação direta não está disponível neste momento. Tente abrir o aplicativo no Google Chrome fora do modo de pré-visualização.");
+      openManualInstallGuide();
     }
   };
 
@@ -318,7 +325,59 @@ export default function Layout() {
         <Outlet />
       </main>
         </div>
-  <CookieConsentBanner />
+      {/* Manual Install Guide Modal */}
+      {manualInstallPlatform && (
+        <div className="fixed inset-0 bg-black/60 z-[70] flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-sm overflow-hidden animate-scale-up">
+            <div className="bg-brand text-white p-4 flex justify-between items-center">
+              <h3 className="font-bold text-lg">Instalar Aplicativo</h3>
+              <button onClick={() => setManualInstallPlatform(null)} className="p-1 hover:bg-white/20 rounded-full transition-colors">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-6 text-gray-700 text-sm space-y-4">
+              {manualInstallPlatform === 'ios' && (
+                <>
+                  <p>Para instalar o app no seu iPhone ou iPad:</p>
+                  <ol className="list-decimal pl-5 space-y-3">
+                    <li>Toque no ícone de <strong>Compartilhar</strong> (quadrado com seta para cima) na barra inferior do Safari.</li>
+                    <li>Role o menu para baixo e selecione <strong>Adicionar à Tela de Início</strong>.</li>
+                    <li>Toque em <strong>Adicionar</strong> no canto superior direito.</li>
+                  </ol>
+                </>
+              )}
+              {manualInstallPlatform === 'android' && (
+                <>
+                  <p>Para instalar o app no seu Android:</p>
+                  <ol className="list-decimal pl-5 space-y-3">
+                    <li>Toque no menu do navegador (três pontos) no canto superior direito.</li>
+                    <li>Selecione <strong>Adicionar à tela inicial</strong> ou <strong>Instalar aplicativo</strong>.</li>
+                    <li>Confirme tocando em <strong>Adicionar</strong> ou <strong>Instalar</strong>.</li>
+                  </ol>
+                </>
+              )}
+              {manualInstallPlatform === 'desktop' && (
+                <>
+                  <p>Para instalar o app no seu computador:</p>
+                  <ol className="list-decimal pl-5 space-y-3">
+                    <li>Verifique se há um ícone de instalação (um pequeno monitor com uma seta) no lado direito da barra de endereços e clique nele.</li>
+                    <li>Ou, clique no menu do Chrome (três pontos no canto superior direito) e selecione <strong>Instalar Aplicativo...</strong> ou <strong>Transmitir, salvar e compartilhar &gt; Instalar página como app...</strong></li>
+                  </ol>
+                </>
+              )}
+              
+              <button 
+                onClick={() => setManualInstallPlatform(null)}
+                className="w-full mt-6 py-2.5 bg-brand text-white rounded-lg font-bold shadow hover:bg-brand/90 transition-colors uppercase tracking-widest text-xs"
+              >
+                Entendi
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <CookieConsentBanner />
   </div>
   );
 }
