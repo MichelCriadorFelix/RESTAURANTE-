@@ -52,18 +52,18 @@ export default function Cart() {
     ? (!user?.phone || !user?.address)
     : !user?.phone;
 
-  const calculatedDeliveryFee = React.useMemo(() => {
-    if (serviceType !== 'delivery') return 0;
+  const { calculatedDeliveryFee, isNeighborhoodExplicitlyAllowed } = React.useMemo(() => {
+    if (serviceType !== 'delivery') return { calculatedDeliveryFee: 0, isNeighborhoodExplicitlyAllowed: false };
     if (companyInfo?.neighborhoodFees && user?.addressNeighborhood) {
       const userNeighborhood = user.addressNeighborhood.trim();
       const match = companyInfo.neighborhoodFees.find(nh => 
         nh.name.trim().localeCompare(userNeighborhood, 'pt-BR', { sensitivity: 'base' }) === 0
       );
       if (match) {
-        return match.fee;
+        return { calculatedDeliveryFee: match.fee, isNeighborhoodExplicitlyAllowed: true };
       }
     }
-    return companyInfo?.deliveryFee || 0;
+    return { calculatedDeliveryFee: companyInfo?.deliveryFee || 0, isNeighborhoodExplicitlyAllowed: false };
   }, [serviceType, companyInfo, user?.addressNeighborhood]);
 
   // Keep address synchronized with user profile data when loaded/changed
@@ -110,7 +110,7 @@ export default function Cart() {
     let finalDeliveryFee = calculatedDeliveryFee;
 
     // Execute distance calculation only for delivery orders
-    if (serviceType === 'delivery' && companyInfo?.deliveryRadiusKm) {
+    if (serviceType === 'delivery' && companyInfo?.deliveryRadiusKm && !isNeighborhoodExplicitlyAllowed) {
       let restaurantLat = companyInfo?.lat;
       let restaurantLng = companyInfo?.lng;
 
