@@ -185,7 +185,15 @@ export default function Layout() {
         </div>
         
         <div className="flex items-center space-x-3">
-          
+          {user && canInstall && !isStandalone && (
+            <button 
+              onClick={handleInstallClick} 
+              className="flex items-center justify-center bg-brand/20 text-brand p-1.5 rounded-lg hover:bg-brand hover:text-white transition-colors" 
+              title="Instalar App"
+            >
+              <Download size={18} />
+            </button>
+          )}
           {user && (
             <button onClick={handleLogout} className="p-1.5 text-gray-400 hover:text-red-400 transition-colors" title="Sair">
               <LogOut size={18} />
@@ -243,7 +251,15 @@ export default function Layout() {
         {/* Desktop Install / Logout footer */}
         {user && (
           <div className="p-4 border-t border-gray-800">
-            
+            {canInstall && !isStandalone && (
+              <button 
+                onClick={handleInstallClick}
+                className="w-full flex items-center justify-center space-x-2 px-3 py-2.5 bg-brand/10 text-brand rounded-lg hover:bg-brand hover:text-white transition-colors text-xs font-bold uppercase tracking-widest mb-3"
+              >
+                <Download size={16} />
+                <span>Instalar App</span>
+              </button>
+            )}
             <div className="text-[10px] mb-2 px-3 text-gray-500 font-bold uppercase tracking-widest truncate">{user.name}</div>
             <button 
               onClick={handleLogout}
