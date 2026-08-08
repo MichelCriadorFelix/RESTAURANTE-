@@ -12,7 +12,6 @@ export default defineConfig(() => {
       VitePWA({
         registerType: 'autoUpdate',
         injectRegister: 'auto',
-        includeAssets: ['favicon.ico', 'icon-192.png', 'icon-512.png', 'apple-touch-icon.png'],
         manifest: {
           id: '/',
           name: 'Sensação Gourmet',
@@ -24,15 +23,20 @@ export default defineConfig(() => {
           orientation: 'portrait',
           start_url: '/',
           scope: '/',
+          // Icons are pinned to a fixed GitHub commit (not the `main` branch)
+          // so AI Studio's binary-write bug, which has repeatedly corrupted
+          // these files locally, can never affect what's actually served —
+          // raw.githubusercontent.com serves the exact bytes of that commit
+          // forever, regardless of what happens to the repo afterwards.
           icons: [
             {
-              src: '/icon-192.png',
+              src: 'https://raw.githubusercontent.com/MichelCriadorFelix/RESTAURANTE-/1975716dd80f7c608f07a4d6ebb4628f6da7d780/public/icon-192.png',
               sizes: '192x192',
               type: 'image/png',
               purpose: 'any maskable'
             },
             {
-              src: '/icon-512.png',
+              src: 'https://raw.githubusercontent.com/MichelCriadorFelix/RESTAURANTE-/1975716dd80f7c608f07a4d6ebb4628f6da7d780/public/icon-512.png',
               sizes: '512x512',
               type: 'image/png',
               purpose: 'any maskable'
@@ -43,7 +47,7 @@ export default defineConfig(() => {
               name: 'Painel Admin',
               short_name: 'Admin',
               url: '/admin',
-              icons: [{ src: '/icon-192.png', sizes: '192x192' }]
+              icons: [{ src: 'https://raw.githubusercontent.com/MichelCriadorFelix/RESTAURANTE-/1975716dd80f7c608f07a4d6ebb4628f6da7d780/public/icon-192.png', sizes: '192x192' }]
             }
           ]
         },
