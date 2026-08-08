@@ -1,3 +1,14 @@
+
+function escapeHtml(value: string | undefined | null): string {
+  if (value == null) return '';
+  return String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 import React, { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { doc, updateDoc, collection, query, orderBy, onSnapshot, addDoc } from 'firebase/firestore';
@@ -459,20 +470,20 @@ export default function OrderDetails() {
         </head>
         <body onload="window.print();">
           <div class="header">
-            <div class="title">${companyInfo.name || 'IRMAOS PILAR'}</div>
-            <div style="font-size: 0.9em; margin-top: 5px;">PEDIDO #${order.id.slice(-6).toUpperCase()}</div>
+            <div class="title">${escapeHtml(companyInfo.name || 'IRMAOS PILAR')}</div>
+            <div style="font-size: 0.9em; margin-top: 5px;">PEDIDO #${escapeHtml(order.id.slice(-6).toUpperCase())}</div>
             <div style="font-size: 0.8em;">${format(order.createdAt, 'dd/MM/yyyy HH:mm')}</div>
           </div>
 
           ${!isKitchen ? `
           <div class="section">
             <div class="label">Cliente:</div>
-            <div>${order.userName}</div>
+            <div>${escapeHtml(order.userName)}</div>
           </div>
 
           <div class="section">
             <div class="label">Endereço de Entrega:</div>
-            <div>${order.address || 'Não informado'}</div>
+            <div>${escapeHtml(order.address || 'Não informado')}</div>
           </div>
           ` : `
           <div class="section" style="text-align: center; background: #eee; padding: 5px;">
@@ -484,13 +495,13 @@ export default function OrderDetails() {
             <div class="label" style="margin-bottom: 5px;">Itens do Pedido:</div>
             ${order.items.map(item => `
               <div class="item">
-                <span class="notranslate" translate="no">${item.quantity}x ${item.product.name}</span>
+                <span class="notranslate" translate="no">${item.quantity}x ${escapeHtml(item.product.name)}</span>
                 ${!isKitchen ? `<span>${formatCurrency(item.totalPrice)}</span>` : ''}
               </div>
-              ${item.customizationSelections ? Object.entries(item.customizationSelections).map(([step, options]) => options.length > 0 ? `<div class="item-details">- ${step}: ${options.map(o => o.name).join(', ')}</div>` : '').join('') : ''}
-              ${item.notes ? `<div class="item-details">- Obs: ${item.notes}</div>` : ''}
-              ${!item.customizationSelections && item.selectedOption && item.selectedOption !== 'Nenhum' ? `<div class="item-details">- Opção: ${item.selectedOption}</div>` : ''}
-              ${!item.customizationSelections && item.selectedSize ? `<div class="item-details">- Opção: ${formatSizeLabel(item.selectedSize)}</div>` : ''}
+              ${item.customizationSelections ? Object.entries(item.customizationSelections).map(([step, options]) => options.length > 0 ? `<div class="item-details">- ${escapeHtml(step)}: ${options.map(o => escapeHtml(o.name)).join(', ')}</div>` : '').join('') : ''}
+              ${item.notes ? `<div class="item-details">- Obs: ${escapeHtml(item.notes)}</div>` : ''}
+              ${!item.customizationSelections && item.selectedOption && item.selectedOption !== 'Nenhum' ? `<div class="item-details">- Opção: ${escapeHtml(item.selectedOption)}</div>` : ''}
+              ${!item.customizationSelections && item.selectedSize ? `<div class="item-details">- Opção: ${escapeHtml(formatSizeLabel(item.selectedSize))}</div>` : ''}
               <div class="divider"></div>
             `).join('')}
           </div>
@@ -536,7 +547,7 @@ export default function OrderDetails() {
             
             ${order.notes ? `
               <div class="label" style="margin-top: 8px;">Observações:</div>
-              <div style="font-size: 0.9em;">${order.notes}</div>
+              <div style="font-size: 0.9em;">${escapeHtml(order.notes)}</div>
             ` : ''}
           </div>
           ` : ''}
