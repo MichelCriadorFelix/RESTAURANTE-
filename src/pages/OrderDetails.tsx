@@ -111,6 +111,7 @@ export default function OrderDetails() {
   const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
   const [selectedPrinterSize, setSelectedPrinterSize] = useState<'80mm' | '58mm'>('80mm');
   const [printType, setPrintType] = useState<'delivery' | 'kitchen' | 'both'>('delivery');
+  const [pendingPrint, setPendingPrint] = useState<{ type: 'delivery' | 'kitchen'; method: 'standard' | 'rawbt' } | null>(null);
 
   const [alert, setAlert] = useState<{
     type: 'success' | 'error' | 'warning';
@@ -458,12 +459,13 @@ export default function OrderDetails() {
             .divider { border-top: 2px dashed #000; margin: 5px 0; }
             @media print {
               .no-print { display: none !important; }
-              * { 
-                color: #000000 !important; 
+              * {
+                color: #000000 !important;
                 font-weight: 900 !important;
                 -webkit-print-color-adjust: exact !important;
                 print-color-adjust: exact !important;
                 text-shadow: 0 0 1px #000 !important;
+                -webkit-text-stroke: 0.3px #000;
               }
             }
           </style>
@@ -562,31 +564,61 @@ export default function OrderDetails() {
 
   const handlePrint = (type: 'delivery' | 'kitchen') => {
     const html = generatePrintHTML(selectedPrinterSize, type);
-    
-    // Usar um iframe oculto para evitar bloqueadores de pop-up no celular
-    const iframe = document.createElement('iframe');
-    iframe.style.position = 'fixed';
-    iframe.style.right = '0';
-    iframe.style.bottom = '0';
-    iframe.style.width = '0';
-    iframe.style.height = '0';
-    iframe.style.border = 'none';
-    
-    document.body.appendChild(iframe);
-    
-    if (iframe.contentWindow) {
-      iframe.contentWindow.document.open();
-      iframe.contentWindow.document.write(html);
-      iframe.contentWindow.document.close();
-      
-      // Delay para garantir a renderização antes de chamar o print e limpar o iframe depois
-      setTimeout(() => {
-        if (document.body.contains(iframe)) {
-          document.body.removeChild(iframe);
+
+    // Some mobile browsers ignore the hidden-iframe's own print scope and
+    // print the whole app window instead. Render the receipt directly into
+    // the live page inside #print-container and hide everything else with
+    // a @media print rule, so there's nothing else on the page to print.
+    const printContainer = document.createElement('div');
+    printContainer.id = 'print-container';
+
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(html, 'text/html');
+
+    const style = document.createElement('style');
+    style.id = 'print-style';
+    style.innerHTML = `
+      @media print {
+        body > *:not(#print-container):not(script):not(style) {
+          display: none !important;
         }
-      }, 10000); // Remove após 10 segundos para dar tempo do modal de print abrir
-    }
-    
+        body {
+          background: #fff !important;
+          margin: 0 !important;
+          padding: 0 !important;
+        }
+        #print-container {
+          display: block !important;
+          position: relative !important;
+          left: 0 !important;
+          top: 0 !important;
+          margin: 0 !important;
+          padding: 0 !important;
+          background: #fff !important;
+        }
+      }
+    `;
+
+    const innerStyle = document.createElement('style');
+    innerStyle.innerHTML = doc.querySelector('style')?.innerHTML || '';
+    printContainer.appendChild(innerStyle);
+
+    Array.from(doc.body.childNodes).forEach(node => {
+      printContainer.appendChild(node.cloneNode(true));
+    });
+
+    document.head.appendChild(style);
+    document.body.appendChild(printContainer);
+
+    setTimeout(() => {
+      window.print();
+
+      setTimeout(() => {
+        if (document.head.contains(style)) document.head.removeChild(style);
+        if (document.body.contains(printContainer)) document.body.removeChild(printContainer);
+      }, 1000);
+    }, 200);
+
     setIsPrintModalOpen(false);
   };
 
@@ -594,7 +626,10 @@ export default function OrderDetails() {
     const html = generatePrintHTML(selectedPrinterSize, type);
     const cleanHtml = html.replace('<body onload="window.print();">', '<body>');
     const b64 = btoa(unescape(encodeURIComponent(cleanHtml)));
-    window.location.href = `intent:${b64}#Intent;scheme=rawbt;package=ru.a402d.rawbtprinter;end;`;
+    // RawBT needs the "base64," marker to know this payload is encoded —
+    // without it, it printed the raw base64 string as literal text instead
+    // of decoding it first (looked like a wall of random characters).
+    window.location.href = `intent:base64,${b64}#Intent;scheme=rawbt;package=ru.a402d.rawbtprinter;end;`;
     setIsPrintModalOpen(false);
   };
 
@@ -901,32 +936,32 @@ export default function OrderDetails() {
           {isAdmin && (
             <div className="bg-gray-50 p-4 rounded-xl border border-gray-200 mt-6">
               <h3 className="font-bold text-[10px] text-gray-500 mb-3 uppercase tracking-widest">Controles do Administrador</h3>
-              <div className="flex flex-wrap gap-2">
-                <button 
-                  onClick={() => handleStatusChange('preparing')} 
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  onClick={() => handleStatusChange('preparing')}
                   disabled={uploading || order.status === 'preparing'}
-                  className="bg-blue-600 text-white px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-widest hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="bg-blue-600 text-white px-3 py-2.5 rounded-lg text-[10px] font-bold uppercase tracking-widest hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-center leading-tight"
                 >
                   Aprovar & Preparar
                 </button>
-                <button 
-                  onClick={() => handleStatusChange('delivering')} 
+                <button
+                  onClick={() => handleStatusChange('delivering')}
                   disabled={uploading || order.status === 'delivering'}
-                  className="bg-purple-600 text-white px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-widest hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="bg-purple-600 text-white px-3 py-2.5 rounded-lg text-[10px] font-bold uppercase tracking-widest hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed text-center leading-tight"
                 >
                   {order.serviceType === 'pickup' ? 'Pronto p/ Retirada' : order.serviceType === 'dine_in' ? 'Pronto / Servir' : 'Saiu p/ Entrega'}
                 </button>
-                <button 
-                  onClick={() => handleStatusChange('completed')} 
+                <button
+                  onClick={() => handleStatusChange('completed')}
                   disabled={uploading || order.status === 'completed'}
-                  className="bg-green-600 text-white px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-widest hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="bg-green-600 text-white px-3 py-2.5 rounded-lg text-[10px] font-bold uppercase tracking-widest hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed text-center leading-tight"
                 >
                   Concluído
                 </button>
-                <button 
-                  onClick={() => handleStatusChange('cancelled')} 
+                <button
+                  onClick={() => handleStatusChange('cancelled')}
                   disabled={uploading || order.status === 'cancelled'}
-                  className="bg-gray-800 text-white px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-widest hover:bg-gray-900 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="bg-gray-800 text-white px-3 py-2.5 rounded-lg text-[10px] font-bold uppercase tracking-widest hover:bg-gray-900 disabled:opacity-50 disabled:cursor-not-allowed text-center leading-tight"
                 >
                   Cancelar
                 </button>
@@ -1006,7 +1041,7 @@ export default function OrderDetails() {
                     <img src={msg.imageUrl} alt="Anexo de pagamento" className="max-h-48 object-contain rounded" referrerPolicy="no-referrer" />
                   </div>
                 )}
-                {msg.text && <p className="text-xs font-medium leading-relaxed">{msg.text}</p>}
+                {msg.text && <p className="text-xs font-medium leading-relaxed break-words whitespace-pre-wrap">{msg.text}</p>}
               </div>
               <span className="text-[9px] font-bold uppercase text-gray-400 mt-1">{format(new Date(msg.createdAt), 'HH:mm')}</span>
             </div>
@@ -1135,14 +1170,14 @@ export default function OrderDetails() {
                   
                   <div className="grid grid-cols-2 gap-2 mb-2">
                     <button
-                      onClick={() => handlePrint('delivery')}
+                      onClick={() => setPendingPrint({ type: 'delivery', method: 'standard' })}
                       className="w-full bg-gray-900 text-white py-3 rounded-xl font-black uppercase text-[10px] tracking-widest hover:bg-gray-800 transition-all shadow-lg active:scale-95 flex flex-col items-center justify-center gap-1"
                     >
                       <Printer size={16} />
                       Entrega (Padrão)
                     </button>
                     <button
-                      onClick={() => handleRawBTPrint('delivery')}
+                      onClick={() => setPendingPrint({ type: 'delivery', method: 'rawbt' })}
                       className="w-full bg-blue-600 text-white py-3 rounded-xl font-black uppercase text-[10px] tracking-widest hover:bg-blue-700 transition-all shadow-lg active:scale-95 flex flex-col items-center justify-center gap-1"
                     >
                       <Smartphone size={16} />
@@ -1152,14 +1187,14 @@ export default function OrderDetails() {
 
                   <div className="grid grid-cols-2 gap-2">
                     <button
-                      onClick={() => handlePrint('kitchen')}
+                      onClick={() => setPendingPrint({ type: 'kitchen', method: 'standard' })}
                       className="w-full bg-white border-2 border-gray-900 text-gray-900 py-3 rounded-xl font-black uppercase text-[10px] tracking-widest hover:bg-gray-50 transition-all active:scale-95 flex flex-col items-center justify-center gap-1"
                     >
                       <ChefHat size={16} />
                       Cozinha (Padrão)
                     </button>
                     <button
-                      onClick={() => handleRawBTPrint('kitchen')}
+                      onClick={() => setPendingPrint({ type: 'kitchen', method: 'rawbt' })}
                       className="w-full bg-blue-50 border-2 border-blue-600 text-blue-700 py-3 rounded-xl font-black uppercase text-[10px] tracking-widest hover:bg-blue-100 transition-all active:scale-95 flex flex-col items-center justify-center gap-1"
                     >
                       <Smartphone size={16} />
@@ -1171,6 +1206,69 @@ export default function OrderDetails() {
                 <p className="text-[9px] text-gray-400 text-center font-bold uppercase tracking-tighter italic">
                   * Opção Bluetooth requer o app gratuito 'RawBT' instalado no Android.
                 </p>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Print Preview Modal */}
+      <AnimatePresence>
+        {pendingPrint && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4 backdrop-blur-sm"
+            onClick={() => setPendingPrint(null)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.9, opacity: 0, y: 20 }}
+              className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden flex flex-col max-h-[90vh]"
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="bg-brand p-4 text-white flex items-center justify-between shrink-0">
+                <div className="flex items-center gap-2">
+                  <Printer size={20} />
+                  <h3 className="font-black uppercase tracking-wider text-sm">Pré-visualização</h3>
+                </div>
+                <button onClick={() => setPendingPrint(null)} className="hover:bg-white/20 p-1 rounded-lg transition-colors">
+                  <XCircle size={20} />
+                </button>
+              </div>
+
+              <div className="flex-1 overflow-y-auto bg-gray-100 p-4 flex justify-center">
+                <iframe
+                  title="Pré-visualização do recibo"
+                  srcDoc={generatePrintHTML(selectedPrinterSize, pendingPrint.type).replace('<body onload="window.print();">', '<body>')}
+                  className="bg-white shadow-md border border-gray-200"
+                  style={{ width: selectedPrinterSize === '80mm' ? '302px' : '219px', height: '500px' }}
+                />
+              </div>
+
+              <div className="p-4 border-t border-gray-100 flex gap-2 shrink-0">
+                <button
+                  onClick={() => setPendingPrint(null)}
+                  className="flex-1 py-3 border-2 border-gray-200 text-gray-600 rounded-xl font-black uppercase text-[10px] tracking-widest hover:bg-gray-50 transition-all"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={() => {
+                    const { type, method } = pendingPrint;
+                    setPendingPrint(null);
+                    if (method === 'rawbt') {
+                      handleRawBTPrint(type);
+                    } else {
+                      handlePrint(type);
+                    }
+                  }}
+                  className="flex-1 py-3 bg-brand text-white rounded-xl font-black uppercase text-[10px] tracking-widest hover:bg-brand-dark transition-all shadow-md"
+                >
+                  Confirmar e Imprimir
+                </button>
               </div>
             </motion.div>
           </motion.div>

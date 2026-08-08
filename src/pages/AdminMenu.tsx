@@ -104,7 +104,16 @@ export default function AdminMenu() {
 
   const handleEdit = (product: Product) => {
     setIsCreatingCategory(false);
-    setFormData(product);
+    setFormData({
+      ...product,
+      // Backfill stable ids on any legacy options saved before this field
+      // existed — without them, React reuses the wrong <input> after a
+      // reorder/remove because it falls back to matching by array index.
+      customizationSteps: product.customizationSteps?.map(step => ({
+        ...step,
+        options: step.options.map(opt => ({ ...opt, id: opt.id || crypto.randomUUID() }))
+      }))
+    });
     setEditingId(product.id);
     setImageFile(null);
     setIsFormOpen(true);
@@ -167,7 +176,7 @@ export default function AdminMenu() {
   const handleAddOptionToStep = (stepIndex: number) => {
     setFormData(prev => {
       const newSteps = [...(prev.customizationSteps || [])];
-      newSteps[stepIndex].options.push({ name: '', price: undefined });
+      newSteps[stepIndex].options.push({ id: crypto.randomUUID(), name: '', price: undefined });
       return { ...prev, customizationSteps: newSteps };
     });
   };
@@ -429,7 +438,7 @@ export default function AdminMenu() {
                         {step.options.length > 0 ? (
                           <div className="space-y-2">
                             {step.options.map((option, optionIndex) => (
-                              <div key={optionIndex} className="flex gap-2 items-start group/option">
+                              <div key={option.id || optionIndex} className="flex gap-2 items-start group/option">
                                 <div className="flex flex-col gap-0.5 mt-0.5">
                                   <button type="button" onClick={() => handleMoveOption(stepIndex, optionIndex, 'up')} disabled={optionIndex === 0} className="text-gray-400 hover:text-brand disabled:opacity-30 p-0.5" title="Mover para cima">
                                     <ChevronUp size={14} />

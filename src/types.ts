@@ -23,6 +23,7 @@ export interface User {
 }
 
 export interface StepOption {
+  id?: string;
   name: string;
   price?: number;
 }

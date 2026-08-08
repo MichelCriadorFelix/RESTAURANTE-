@@ -230,8 +230,8 @@ export function ProductModal({ product, onClose, editItemIndex, existingItem }: 
                     const isDisabled = !isSelected && step.max !== 999 && currentSelections.length >= step.max && !isRadio;
                     
                     return (
-                      <label 
-                        key={oIdx} 
+                      <label
+                        key={opt.id || oIdx}
                         onClick={(e) => {
                           if (isDisabled) {
                             e.preventDefault();
