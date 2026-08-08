@@ -3,7 +3,8 @@ import { collection, query, onSnapshot, doc, updateDoc, deleteDoc, setDoc, addDo
 import { db, sanitizeForFirestore, handleFirestoreError, OperationType } from '../lib/firebase';
 import { Product } from '../types';
 import { formatCurrency, compressImage } from '../lib/utils';
-import { Edit, Trash2, Plus, X, Check, AlertTriangle, AlertCircle, Search, Image as ImageIcon, UploadCloud } from 'lucide-react';
+import { Edit, Trash2, Plus, X, Check, AlertTriangle, AlertCircle, Search, Image as ImageIcon, UploadCloud, ChevronUp, ChevronDown } from 'lucide-react';
+import { useRef } from 'react';
 import { initialMenu } from '../lib/seedData';
 import { AnimatePresence, motion } from 'framer-motion';
 
@@ -11,6 +12,7 @@ export default function AdminMenu() {
   const [products, setProducts] = useState<Product[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [isFormOpen, setIsFormOpen] = useState(false);
+  const formRef = useRef<HTMLDivElement>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [isCreatingCategory, setIsCreatingCategory] = useState(false);
   const [formData, setFormData] = useState<Partial<Product>>({
@@ -106,6 +108,9 @@ export default function AdminMenu() {
     setEditingId(product.id);
     setImageFile(null);
     setIsFormOpen(true);
+    setTimeout(() => {
+      formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 100);
   };
 
   const handleAddNew = () => {
@@ -122,6 +127,9 @@ export default function AdminMenu() {
     setEditingId(null);
     setImageFile(null);
     setIsFormOpen(true);
+    setTimeout(() => {
+      formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 100);
   };
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -168,6 +176,26 @@ export default function AdminMenu() {
     setFormData(prev => {
       const newSteps = [...(prev.customizationSteps || [])];
       newSteps[stepIndex].options[optionIndex] = { ...newSteps[stepIndex].options[optionIndex], [field]: value };
+      return { ...prev, customizationSteps: newSteps };
+    });
+  };
+
+  const handleMoveOption = (stepIndex: number, optionIndex: number, direction: 'up' | 'down') => {
+    setFormData(prev => {
+      const newSteps = [...(prev.customizationSteps || [])];
+      const options = [...newSteps[stepIndex].options];
+      
+      if (direction === 'up' && optionIndex > 0) {
+        const temp = options[optionIndex - 1];
+        options[optionIndex - 1] = options[optionIndex];
+        options[optionIndex] = temp;
+      } else if (direction === 'down' && optionIndex < options.length - 1) {
+        const temp = options[optionIndex + 1];
+        options[optionIndex + 1] = options[optionIndex];
+        options[optionIndex] = temp;
+      }
+      
+      newSteps[stepIndex].options = options;
       return { ...prev, customizationSteps: newSteps };
     });
   };
@@ -401,7 +429,15 @@ export default function AdminMenu() {
                         {step.options.length > 0 ? (
                           <div className="space-y-2">
                             {step.options.map((option, optionIndex) => (
-                              <div key={optionIndex} className="flex gap-2 items-start">
+                              <div key={optionIndex} className="flex gap-2 items-start group/option">
+                                <div className="flex flex-col gap-0.5 mt-0.5">
+                                  <button type="button" onClick={() => handleMoveOption(stepIndex, optionIndex, 'up')} disabled={optionIndex === 0} className="text-gray-400 hover:text-brand disabled:opacity-30 p-0.5" title="Mover para cima">
+                                    <ChevronUp size={14} />
+                                  </button>
+                                  <button type="button" onClick={() => handleMoveOption(stepIndex, optionIndex, 'down')} disabled={optionIndex === step.options.length - 1} className="text-gray-400 hover:text-brand disabled:opacity-30 p-0.5" title="Mover para baixo">
+                                    <ChevronDown size={14} />
+                                  </button>
+                                </div>
                                 <div className="flex-1">
                                   <input type="text" required value={option.name} onChange={e => handleUpdateOptionInStep(stepIndex, optionIndex, 'name', e.target.value)} placeholder="Nome da opção" className="w-full px-2 py-1 border border-gray-200 rounded-md text-xs focus:outline-none focus:ring-1 focus:ring-brand" />
                                 </div>
