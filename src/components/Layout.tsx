@@ -34,7 +34,8 @@ export default function Layout() {
   useExitGuard(isAdmin ? '/admin' : '/');
   const [deferredPrompt, setDeferredPrompt] = useState<any>(() => (window as any).deferredPrompt || null);
   const [isStandalone, setIsStandalone] = useState(false);
-  const [showInstallBanner, setShowInstallBanner] = useState(() => !!(window as any).deferredPrompt); // Começa oculto a menos que já exista o prompt
+  const [showInstallBanner, setShowInstallBanner] = useState(true);
+  const [showIosInstructions, setShowIosInstructions] = useState(false);
   const [logoError, setLogoError] = useState(false);
   const [companyInfo, setCompanyInfo] = useState<{ name: string; logoUrl?: string }>({
     name: "SENSAÇÃO GOUMERT"
@@ -98,32 +99,32 @@ export default function Layout() {
     };
   }, []);
 
-  const handleInstallClick = () => {
+  const isIos = () => {
+    const userAgent = window.navigator.userAgent.toLowerCase();
+    return /iphone|ipad|ipod/.test(userAgent);
+  };
+
+  const handleInstallClick = async () => {
     const promptToUse = deferredPrompt || (window as any).deferredPrompt;
 
     if (promptToUse) {
       console.log('PWA: Triggering native install prompt...');
-      
-      // Chamar o método .prompt() sem await diretamente no evento de clique
-      promptToUse.prompt();
-      
-      // Aguardar a promessa userChoice
-      promptToUse.userChoice.then((choiceResult: any) => {
+      try {
+        await promptToUse.prompt();
+        const choiceResult = await promptToUse.userChoice;
         console.log(`PWA: User choice result: ${choiceResult.outcome}`);
-        
         if (choiceResult.outcome === 'accepted') {
-          console.log('PWA: User accepted the install prompt');
-        } else {
-          console.log('PWA: User dismissed the install prompt');
+          setShowInstallBanner(false);
+          setDeferredPrompt(null);
+          (window as any).deferredPrompt = null;
         }
-        
-        // Limpar a variável global e ocultar
-        setDeferredPrompt(null);
-        (window as any).deferredPrompt = null;
-        setShowInstallBanner(false);
-      }).catch((e: any) => {
-        console.error('PWA: Error on userChoice:', e);
-      });
+      } catch (e) {
+        console.error('PWA: Error triggering prompt:', e);
+      }
+    } else if (isIos()) {
+      setShowIosInstructions(true);
+    } else {
+      console.log('PWA: Native install prompt not ready yet or browser manages installation natively.');
     }
   };
 
@@ -135,9 +136,6 @@ export default function Layout() {
     logout();
     navigate('/login');
   };
-
-  // The install button should only be visible if we have the native prompt or if it's iOS
-  const canInstall = !!deferredPrompt;
 
   return (
     <div className="flex flex-col min-h-[100dvh]">
@@ -170,7 +168,49 @@ export default function Layout() {
           </div>
         </div>
       )}
-      
+
+      {/* IOS INSTRUCTIONS MODAL */}
+      {showIosInstructions && (
+        <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center p-4" onClick={() => setShowIosInstructions(false)}>
+          <div className="bg-white w-full max-w-sm rounded-3xl p-6 shadow-2xl relative animate-fade-in" onClick={e => e.stopPropagation()}>
+            <button onClick={() => setShowIosInstructions(false)} className="absolute top-4 right-4 p-2 text-gray-400 hover:text-gray-600 bg-gray-100 rounded-full">
+              <X size={20} />
+            </button>
+
+            <div className="w-16 h-16 bg-brand/10 rounded-2xl flex items-center justify-center mb-6 mx-auto">
+              <Smartphone size={32} className="text-brand" />
+            </div>
+
+            <h3 className="text-center font-black text-lg text-gray-900 mb-2 uppercase tracking-wide">Instalar no iPhone</h3>
+            <p className="text-center text-sm text-gray-500 font-medium mb-8">Para instalar nosso app no seu iPhone ou iPad:</p>
+
+            <div className="space-y-4">
+              <div className="flex items-start gap-4">
+                <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center shrink-0 font-black text-gray-600 text-sm">1</div>
+                <div>
+                  <p className="text-sm text-gray-800 font-bold">Botão Compartilhar</p>
+                  <p className="text-xs text-gray-500 mt-1">Toque no ícone de compartilhar (quadrado com seta para cima) na barra inferior do Safari.</p>
+                </div>
+              </div>
+              <div className="flex items-start gap-4">
+                <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center shrink-0 font-black text-gray-600 text-sm">2</div>
+                <div>
+                  <p className="text-sm text-gray-800 font-bold">Adicionar à Tela de Início</p>
+                  <p className="text-xs text-gray-500 mt-1">Role a lista para baixo e toque em "Adicionar à Tela de Início".</p>
+                </div>
+              </div>
+            </div>
+
+            <button
+              onClick={() => setShowIosInstructions(false)}
+              className="w-full bg-brand text-white py-4 rounded-xl font-black uppercase tracking-widest text-xs mt-8 hover:bg-brand-dark transition-colors"
+            >
+              Entendi
+            </button>
+          </div>
+        </div>
+      )}
+
     <div className="flex-1 bg-canvas text-text-main flex flex-col md:flex-row font-sans relative">
 
       {/* HEADER FOR MOBILE (md:hidden) */}
