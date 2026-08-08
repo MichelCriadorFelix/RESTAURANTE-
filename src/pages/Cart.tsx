@@ -8,6 +8,7 @@ import { useNavigate } from 'react-router-dom';
 import { Trash2, MapPin, Phone, User as UserIcon, Edit2, CreditCard, DollarSign, QrCode, MessageSquare, AlertCircle, Check, X, Image as ImageIcon, Truck, ShoppingBag, UtensilsCrossed, Store } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { CompanyInfo, ServiceType } from '../types';
+import { ProductModal } from '../components/ProductModal';
 import { isStoreOpen } from '../lib/openingHours';
 
 export default function Cart() {
@@ -23,6 +24,7 @@ export default function Cart() {
   const [notes, setNotes] = useState('');
   const [companyInfo, setCompanyInfo] = useState<CompanyInfo | null>(null);
   const navigate = useNavigate();
+  const [editingItemIndex, setEditingItemIndex] = useState<number | null>(null);
 
   useEffect(() => {
     const unsub = onSnapshot(doc(db, 'settings', 'company_info'), (snapshot) => {
@@ -742,6 +744,16 @@ export default function Cart() {
               </div>
             </div>
           </motion.div>
+        )}
+      </AnimatePresence>
+      <AnimatePresence>
+        {editingItemIndex !== null && items[editingItemIndex] && (
+          <ProductModal
+            product={items[editingItemIndex].product}
+            onClose={() => setEditingItemIndex(null)}
+            editItemIndex={editingItemIndex}
+            existingItem={items[editingItemIndex]}
+          />
         )}
       </AnimatePresence>
     </div>

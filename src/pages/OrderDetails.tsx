@@ -7,7 +7,7 @@ import { Order, ChatMessage, CompanyInfo } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { formatCurrency, formatSizeLabel } from '../lib/utils';
 import { format } from 'date-fns';
-import { Send, Upload, Copy, Check, CreditCard, ChefHat, Truck, CheckCircle, XCircle, Clock, AlertCircle, Printer, ChevronLeft, Image as ImageIcon, ShoppingBag, UtensilsCrossed, Store } from 'lucide-react';
+import { Send, Upload, Copy, Check, CreditCard, ChefHat, Truck, CheckCircle, XCircle, Clock, AlertCircle, Printer, ChevronLeft, Image as ImageIcon, ShoppingBag, UtensilsCrossed, Store, Smartphone } from 'lucide-react';
 import { playNotificationSound } from '../lib/audio';
 import { AnimatePresence, motion } from 'framer-motion';
 
@@ -451,7 +451,7 @@ export default function OrderDetails() {
             }
           </style>
         </head>
-        <body onload="window.print(); window.close();">
+        <body onload="window.print();">
           <div class="header">
             <div class="title">${companyInfo.name || 'IRMAOS PILAR'}</div>
             <div style="font-size: 0.9em; margin-top: 5px;">PEDIDO #${order.id.slice(-6).toUpperCase()}</div>
@@ -544,11 +544,40 @@ export default function OrderDetails() {
   };
 
   const handlePrint = (type: 'delivery' | 'kitchen') => {
-    const printWindow = window.open('', '_blank', 'width=400,height=600');
-    if (!printWindow) return;
+    const html = generatePrintHTML(selectedPrinterSize, type);
     
-    printWindow.document.write(generatePrintHTML(selectedPrinterSize, type));
-    printWindow.document.close();
+    // Usar um iframe oculto para evitar bloqueadores de pop-up no celular
+    const iframe = document.createElement('iframe');
+    iframe.style.position = 'fixed';
+    iframe.style.right = '0';
+    iframe.style.bottom = '0';
+    iframe.style.width = '0';
+    iframe.style.height = '0';
+    iframe.style.border = 'none';
+    
+    document.body.appendChild(iframe);
+    
+    if (iframe.contentWindow) {
+      iframe.contentWindow.document.open();
+      iframe.contentWindow.document.write(html);
+      iframe.contentWindow.document.close();
+      
+      // Delay para garantir a renderização antes de chamar o print e limpar o iframe depois
+      setTimeout(() => {
+        if (document.body.contains(iframe)) {
+          document.body.removeChild(iframe);
+        }
+      }, 10000); // Remove após 10 segundos para dar tempo do modal de print abrir
+    }
+    
+    setIsPrintModalOpen(false);
+  };
+
+  const handleRawBTPrint = (type: 'delivery' | 'kitchen') => {
+    const html = generatePrintHTML(selectedPrinterSize, type);
+    const cleanHtml = html.replace('<body onload="window.print();">', '<body>');
+    const b64 = btoa(unescape(encodeURIComponent(cleanHtml)));
+    window.location.href = `intent:${b64}#Intent;scheme=rawbt;package=ru.a402d.rawbtprinter;end;`;
     setIsPrintModalOpen(false);
   };
 
@@ -1087,25 +1116,43 @@ export default function OrderDetails() {
                 <div className="space-y-3">
                   <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">O que deseja imprimir?</p>
                   
-                  <button
-                    onClick={() => handlePrint('delivery')}
-                    className="w-full bg-gray-900 text-white py-4 rounded-xl font-black uppercase text-xs tracking-widest hover:bg-gray-800 transition-all shadow-lg active:scale-95 flex items-center justify-center gap-2"
-                  >
-                    <Printer size={16} />
-                    Imprimir Via Entrega
-                  </button>
+                  <div className="grid grid-cols-2 gap-2 mb-2">
+                    <button
+                      onClick={() => handlePrint('delivery')}
+                      className="w-full bg-gray-900 text-white py-3 rounded-xl font-black uppercase text-[10px] tracking-widest hover:bg-gray-800 transition-all shadow-lg active:scale-95 flex flex-col items-center justify-center gap-1"
+                    >
+                      <Printer size={16} />
+                      Entrega (Padrão)
+                    </button>
+                    <button
+                      onClick={() => handleRawBTPrint('delivery')}
+                      className="w-full bg-blue-600 text-white py-3 rounded-xl font-black uppercase text-[10px] tracking-widest hover:bg-blue-700 transition-all shadow-lg active:scale-95 flex flex-col items-center justify-center gap-1"
+                    >
+                      <Smartphone size={16} />
+                      Entrega (RawBT)
+                    </button>
+                  </div>
 
-                  <button
-                    onClick={() => handlePrint('kitchen')}
-                    className="w-full bg-white border-2 border-gray-900 text-gray-900 py-4 rounded-xl font-black uppercase text-xs tracking-widest hover:bg-gray-50 transition-all active:scale-95 flex items-center justify-center gap-2"
-                  >
-                    <ChefHat size={16} />
-                    Imprimir Via Cozinha
-                  </button>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      onClick={() => handlePrint('kitchen')}
+                      className="w-full bg-white border-2 border-gray-900 text-gray-900 py-3 rounded-xl font-black uppercase text-[10px] tracking-widest hover:bg-gray-50 transition-all active:scale-95 flex flex-col items-center justify-center gap-1"
+                    >
+                      <ChefHat size={16} />
+                      Cozinha (Padrão)
+                    </button>
+                    <button
+                      onClick={() => handleRawBTPrint('kitchen')}
+                      className="w-full bg-blue-50 border-2 border-blue-600 text-blue-700 py-3 rounded-xl font-black uppercase text-[10px] tracking-widest hover:bg-blue-100 transition-all active:scale-95 flex flex-col items-center justify-center gap-1"
+                    >
+                      <Smartphone size={16} />
+                      Cozinha (RawBT)
+                    </button>
+                  </div>
                 </div>
 
                 <p className="text-[9px] text-gray-400 text-center font-bold uppercase tracking-tighter italic">
-                  * A impressão abrirá uma nova janela para comando direto do sistema.
+                  * Opção Bluetooth requer o app gratuito 'RawBT' instalado no Android.
                 </p>
               </div>
             </motion.div>

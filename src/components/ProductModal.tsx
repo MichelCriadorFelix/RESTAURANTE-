@@ -8,6 +8,8 @@ import { useCart } from '../context/CartContext';
 interface ProductModalProps {
   product: Product;
   onClose: () => void;
+  editItemIndex?: number;
+  existingItem?: CartItem;
 }
 
 function getSanitizedCustomizationSteps(product: Product): CustomizationStep[] | undefined {
@@ -40,19 +42,21 @@ function getSanitizedCustomizationSteps(product: Product): CustomizationStep[] |
   });
 }
 
-export function ProductModal({ product, onClose }: ProductModalProps) {
-  const { addItem } = useCart();
-  const [quantity, setQuantity] = useState(1);
-  const [selections, setSelections] = useState<{ [stepTitle: string]: StepOption[] }>({});
-  const [notes, setNotes] = useState('');
+export function ProductModal({ product, onClose, editItemIndex, existingItem }: ProductModalProps) {
+  const { addItem, updateItem } = useCart();
+  const [quantity, setQuantity] = useState(existingItem?.quantity || 1);
+  const [selections, setSelections] = useState<{ [stepTitle: string]: StepOption[] }>(existingItem?.customizationSelections || {});
+  const [notes, setNotes] = useState(existingItem?.notes || '');
 
   const customizationSteps = getSanitizedCustomizationSteps(product);
 
   // Initial legacy state if needed
   const [selectedOption, setSelectedOption] = useState<string>(
-    product.options && product.options.length > 0 ? 'Nenhum' : ''
+    existingItem?.selectedOption || (product.options && product.options.length > 0 ? 'Nenhum' : '')
   );
-  const [selectedSize, setSelectedSize] = useState<'1 item' | '2 itens' | '1 pedaço' | '2 pedaços'>('1 item');
+  const [selectedSize, setSelectedSize] = useState<'1 item' | '2 itens' | '1 pedaço' | '2 pedaços'>(
+    (existingItem?.selectedSize as any) || '1 item'
+  );
 
   const handleToggleOption = (stepTitle: string, option: StepOption, isRadio: boolean, maxLimit: number) => {
     setSelections(prev => {
@@ -102,7 +106,7 @@ export function ProductModal({ product, onClose }: ProductModalProps) {
   const handleAdd = () => {
     if (!canAddToCart()) return;
     
-    addItem({
+    const cartItem = {
       product,
       quantity,
       selectedOption: customizationSteps ? undefined : (selectedOption !== 'Nenhum' ? selectedOption : undefined),
@@ -110,7 +114,13 @@ export function ProductModal({ product, onClose }: ProductModalProps) {
       customizationSelections: customizationSteps ? selections : undefined,
       notes,
       totalPrice: calculateTotal()
-    });
+    };
+
+    if (editItemIndex !== undefined && updateItem) {
+      updateItem(editItemIndex, cartItem);
+    } else {
+      addItem(cartItem);
+    }
     
     onClose();
   };
@@ -295,7 +305,7 @@ export function ProductModal({ product, onClose }: ProductModalProps) {
             disabled={!canAddToCart()}
             className="flex-1 bg-brand text-white py-3 px-4 rounded-lg font-black text-sm uppercase tracking-widest hover:bg-brand-dark transition-colors flex justify-between items-center disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            <span>Adicionar</span>
+            <span>{editItemIndex !== undefined ? 'Salvar Alterações' : 'Adicionar'}</span>
             <span>{formatCurrency(calculateTotal())}</span>
           </button>
         </div>
