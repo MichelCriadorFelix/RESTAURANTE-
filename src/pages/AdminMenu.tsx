@@ -110,7 +110,7 @@ export default function AdminMenu() {
     setIsFormOpen(true);
     setTimeout(() => {
       formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }, 100);
+    }, 150);
   };
 
   const handleAddNew = () => {
@@ -285,7 +285,7 @@ export default function AdminMenu() {
       </div>
 
       {isFormOpen && (
-        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 mb-6">
+        <div ref={formRef} className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 mb-6 scroll-mt-20">
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-sm font-black text-gray-900 uppercase tracking-wider">{editingId ? 'Editar Item' : 'Novo Item'}</h2>
             <button onClick={() => setIsFormOpen(false)} className="text-gray-400 hover:text-gray-600">
@@ -396,7 +396,7 @@ export default function AdminMenu() {
                 <div className="space-y-4">
                   {formData.customizationSteps.map((step, stepIndex) => (
                     <div key={stepIndex} className="p-4 border border-gray-200 rounded-xl bg-gray-50/50 relative group">
-                      <button type="button" onClick={() => handleRemoveStep(stepIndex)} className="absolute -top-2 -right-2 w-6 h-6 bg-red-100 text-red-600 rounded-full flex items-center justify-center shadow-sm opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button type="button" onClick={() => handleRemoveStep(stepIndex)} className="absolute -top-2 -right-2 w-6 h-6 bg-red-100 text-red-600 rounded-full flex items-center justify-center shadow-sm opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
                         <X size={14} />
                       </button>
                       
