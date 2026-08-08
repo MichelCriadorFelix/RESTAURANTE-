@@ -335,7 +335,7 @@ export default function AdminDashboard() {
         if ('Notification' in window && Notification.permission === 'granted') {
           new Notification('Novo Pedido Recebido!', {
             body: 'Você recebeu um novo pedido para analisar.',
-            icon: '/icon-192.png'
+            icon: 'https://raw.githubusercontent.com/MichelCriadorFelix/RESTAURANTE-/1975716dd80f7c608f07a4d6ebb4628f6da7d780/public/icon-192.png'
           });
         }
       }

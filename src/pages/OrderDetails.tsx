@@ -626,10 +626,11 @@ export default function OrderDetails() {
     const html = generatePrintHTML(selectedPrinterSize, type);
     const cleanHtml = html.replace('<body onload="window.print();">', '<body>');
     const b64 = btoa(unescape(encodeURIComponent(cleanHtml)));
-    // RawBT needs the "base64," marker to know this payload is encoded —
-    // without it, it printed the raw base64 string as literal text instead
-    // of decoding it first (looked like a wall of random characters).
-    window.location.href = `intent:base64,${b64}#Intent;scheme=rawbt;package=ru.a402d.rawbtprinter;end;`;
+    // RawBT's documented scheme wraps a standard RFC 2397 data: URI —
+    // it needs the "data:text/html;base64," prefix to know this payload
+    // is HTML to be rendered, not raw ESC/POS bytes or plain text. Without
+    // the MIME type, it printed the decoded HTML/CSS source as literal text.
+    window.location.href = `intent:data:text/html;base64,${b64}#Intent;scheme=rawbt;package=ru.a402d.rawbtprinter;end;`;
     setIsPrintModalOpen(false);
   };
 
