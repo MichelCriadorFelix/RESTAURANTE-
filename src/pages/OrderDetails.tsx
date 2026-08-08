@@ -434,7 +434,7 @@ export default function OrderDetails() {
               font-size: ${size === '80mm' ? '14px' : '12px'};
               line-height: 1.2;
               color: #000;
-              font-weight: 700;
+              font-weight: 900;
             }
             .header { text-align: center; margin-bottom: 10px; border-bottom: 2px dashed #000; padding-bottom: 10px; }
             .title { font-weight: 900; font-size: 1.3em; text-transform: uppercase; }
@@ -446,8 +446,13 @@ export default function OrderDetails() {
             .label { font-weight: 900; text-transform: uppercase; font-size: 0.9em; margin-bottom: 3px; }
             .divider { border-top: 2px dashed #000; margin: 5px 0; }
             @media print {
-              .no-print { display: none; }
-              * { color: #000 !important; }
+              .no-print { display: none !important; }
+              * { 
+                color: #000 !important; 
+                font-weight: 900 !important;
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+              }
             }
           </style>
         </head>
@@ -546,29 +551,55 @@ export default function OrderDetails() {
   const handlePrint = (type: 'delivery' | 'kitchen') => {
     const html = generatePrintHTML(selectedPrinterSize, type);
     
-    // Usar um iframe oculto para evitar bloqueadores de pop-up no celular
-    const iframe = document.createElement('iframe');
-    iframe.style.position = 'fixed';
-    iframe.style.right = '0';
-    iframe.style.bottom = '0';
-    iframe.style.width = '0';
-    iframe.style.height = '0';
-    iframe.style.border = 'none';
+    const printContainer = document.createElement('div');
+    printContainer.id = 'print-container';
     
-    document.body.appendChild(iframe);
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(html, 'text/html');
     
-    if (iframe.contentWindow) {
-      iframe.contentWindow.document.open();
-      iframe.contentWindow.document.write(html);
-      iframe.contentWindow.document.close();
-      
-      // Delay para garantir a renderização antes de chamar o print e limpar o iframe depois
-      setTimeout(() => {
-        if (document.body.contains(iframe)) {
-          document.body.removeChild(iframe);
+    const style = document.createElement('style');
+    style.id = 'print-style';
+    style.innerHTML = `
+      @media print {
+        body > *:not(#print-container):not(script):not(style) {
+          display: none !important;
         }
-      }, 10000); // Remove após 10 segundos para dar tempo do modal de print abrir
-    }
+        body {
+          background: #fff !important;
+          margin: 0 !important;
+          padding: 0 !important;
+        }
+        #print-container {
+          display: block !important;
+          position: relative !important;
+          left: 0 !important;
+          top: 0 !important;
+          margin: 0 !important;
+          padding: 0 !important;
+          background: #fff !important;
+        }
+      }
+    `;
+    
+    const innerStyle = document.createElement('style');
+    innerStyle.innerHTML = doc.querySelector('style')?.innerHTML || '';
+    printContainer.appendChild(innerStyle);
+    
+    Array.from(doc.body.childNodes).forEach(node => {
+      printContainer.appendChild(node.cloneNode(true));
+    });
+    
+    document.head.appendChild(style);
+    document.body.appendChild(printContainer);
+    
+    setTimeout(() => {
+      window.print();
+      
+      setTimeout(() => {
+        if (document.head.contains(style)) document.head.removeChild(style);
+        if (document.body.contains(printContainer)) document.body.removeChild(printContainer);
+      }, 1000);
+    }, 200);
     
     setIsPrintModalOpen(false);
   };
