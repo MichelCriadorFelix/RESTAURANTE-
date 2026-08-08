@@ -34,7 +34,7 @@ export default function Layout() {
   useExitGuard(isAdmin ? '/admin' : '/');
   const [deferredPrompt, setDeferredPrompt] = useState<any>(() => (window as any).deferredPrompt || null);
   const [isStandalone, setIsStandalone] = useState(false);
-  const [showInstallBanner, setShowInstallBanner] = useState(true);
+  const [showInstallBanner, setShowInstallBanner] = useState(() => !!(window as any).deferredPrompt); // Começa oculto a menos que já exista o prompt
   const [logoError, setLogoError] = useState(false);
   const [companyInfo, setCompanyInfo] = useState<{ name: string; logoUrl?: string }>({
     name: "SENSAÇÃO GOUMERT"
@@ -57,6 +57,7 @@ export default function Layout() {
       const event = e.detail || e;
       setDeferredPrompt(event);
       (window as any).deferredPrompt = event;
+      setShowInstallBanner(true);
     };
 
     const handleAppInstalled = () => {
@@ -97,14 +98,17 @@ export default function Layout() {
     };
   }, []);
 
-  const handleInstallClick = async () => {
+  const handleInstallClick = () => {
     const promptToUse = deferredPrompt || (window as any).deferredPrompt;
 
     if (promptToUse) {
       console.log('PWA: Triggering native install prompt...');
-      try {
-        await promptToUse.prompt();
-        const choiceResult = await promptToUse.userChoice;
+      
+      // Chamar o método .prompt() sem await diretamente no evento de clique
+      promptToUse.prompt();
+      
+      // Aguardar a promessa userChoice
+      promptToUse.userChoice.then((choiceResult: any) => {
         console.log(`PWA: User choice result: ${choiceResult.outcome}`);
         
         if (choiceResult.outcome === 'accepted') {
@@ -113,13 +117,13 @@ export default function Layout() {
           console.log('PWA: User dismissed the install prompt');
         }
         
-        // Clear the prompt since it can only be used once
+        // Limpar a variável global e ocultar
         setDeferredPrompt(null);
         (window as any).deferredPrompt = null;
         setShowInstallBanner(false);
-      } catch (e: any) {
-        console.error('PWA: Error triggering prompt:', e);
-      }
+      }).catch((e: any) => {
+        console.error('PWA: Error on userChoice:', e);
+      });
     }
   };
 
