@@ -20,6 +20,15 @@ export interface User {
   createdAt: number;
   emailVerified?: boolean;
   cookieConsentAt?: number;
+  points?: number;
+}
+
+export interface LoyaltyReward {
+  id: string;
+  pointsCost: number;
+  discountType: 'fixed' | 'percent';
+  discountValue: number;
+  label: string;
 }
 
 export interface StepOption {
@@ -82,6 +91,11 @@ export interface Order {
   changeRequested?: boolean;
   changeFor?: number;
   notes?: string;
+  pointsEarned?: number;
+  pointsRedeemed?: number;
+  rewardApplied?: { id: string; label: string; discountAmount: number };
+  pointsCredited?: boolean;
+  pointsDebited?: boolean;
 }
 
 export interface ChatMessage {
@@ -134,5 +148,9 @@ export interface CompanyInfo {
   neighborhoodFees?: { name: string; fee: number }[];
   prepTimeEstimate?: string;
   deliveryTimeEstimate?: string;
+  loyaltyEnabled?: boolean;
+  loyaltySpendPerPoint?: number; // e.g. 10 => every R$10 spent
+  loyaltyPointsPerUnit?: number; // e.g. 1 => 1 point per loyaltySpendPerPoint
+  loyaltyRewards?: LoyaltyReward[];
 }
 

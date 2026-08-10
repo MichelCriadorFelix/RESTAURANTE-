@@ -11,7 +11,7 @@ function escapeHtml(value: string | undefined | null): string {
 
 import React, { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { doc, updateDoc, collection, query, orderBy, onSnapshot, addDoc } from 'firebase/firestore';
+import { doc, updateDoc, collection, query, orderBy, onSnapshot, addDoc, runTransaction } from 'firebase/firestore';
 
 import { db } from '../lib/firebase';
 import { Order, ChatMessage, CompanyInfo } from '../types';
@@ -369,6 +369,52 @@ export default function OrderDetails() {
     try {
       await updateDoc(doc(db, 'orders', id), { status: newStatus, updatedAt: Date.now() });
       setOrder(prev => prev ? { ...prev, status: newStatus } : null);
+
+      // Loyalty points are only ever moved here, via an admin-authenticated
+      // write, never directly by the customer (Firestore rules block
+      // customers from touching users/{uid}.points themselves). Each
+      // transition is guarded by its own flag on the order doc, inside a
+      // transaction, so re-clicking a status or a race between two admins
+      // can't double-debit/credit the same order.
+      try {
+        if (newStatus === 'preparing' && (order.pointsRedeemed || 0) > 0 && !order.pointsDebited) {
+          await runTransaction(db, async (tx) => {
+            const userRef = doc(db, 'users', order.userId);
+            const orderRef = doc(db, 'orders', id);
+            const [userSnap, orderSnap] = await Promise.all([tx.get(userRef), tx.get(orderRef)]);
+            if (!userSnap.exists() || !orderSnap.exists() || orderSnap.data().pointsDebited) return;
+            const currentPoints = userSnap.data().points || 0;
+            const redeemed = orderSnap.data().pointsRedeemed || 0;
+            tx.update(userRef, { points: Math.max(0, currentPoints - redeemed) });
+            tx.update(orderRef, { pointsDebited: true });
+          });
+        } else if (newStatus === 'completed' && (order.pointsEarned || 0) > 0 && !order.pointsCredited) {
+          await runTransaction(db, async (tx) => {
+            const userRef = doc(db, 'users', order.userId);
+            const orderRef = doc(db, 'orders', id);
+            const [userSnap, orderSnap] = await Promise.all([tx.get(userRef), tx.get(orderRef)]);
+            if (!userSnap.exists() || !orderSnap.exists() || orderSnap.data().pointsCredited) return;
+            const currentPoints = userSnap.data().points || 0;
+            const earned = orderSnap.data().pointsEarned || 0;
+            tx.update(userRef, { points: currentPoints + earned });
+            tx.update(orderRef, { pointsCredited: true });
+          });
+        } else if (newStatus === 'cancelled' && order.pointsDebited && (order.pointsRedeemed || 0) > 0) {
+          // Refund the redeemed points if the order that spent them never went through.
+          await runTransaction(db, async (tx) => {
+            const userRef = doc(db, 'users', order.userId);
+            const orderRef = doc(db, 'orders', id);
+            const [userSnap, orderSnap] = await Promise.all([tx.get(userRef), tx.get(orderRef)]);
+            if (!userSnap.exists() || !orderSnap.exists() || !orderSnap.data().pointsDebited) return;
+            const currentPoints = userSnap.data().points || 0;
+            const redeemed = orderSnap.data().pointsRedeemed || 0;
+            tx.update(userRef, { points: currentPoints + redeemed });
+            tx.update(orderRef, { pointsDebited: false });
+          });
+        }
+      } catch (pointsErr) {
+        console.error('Erro ao atualizar pontos de fidelidade:', pointsErr);
+      }
 
       // Enviar mensagem automática amigável no chat
       let systemMessage = '';

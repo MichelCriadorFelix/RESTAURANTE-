@@ -39,7 +39,10 @@ import {
   Trash2,
   Loader2,
   CheckCircle2,
-  AlertCircle
+  AlertCircle,
+  Gift,
+  Star,
+  Plus
 } from 'lucide-react';
 import { playNotificationSound, startRing, stopRing } from '../lib/audio';
 import { DEFAULT_OPENING_HOURS, DAY_NAMES, DAYS_ORDER } from '../lib/openingHours';
@@ -85,8 +88,8 @@ type PeriodType = 'day' | 'week' | 'month' | 'trimester' | 'semester' | 'year';
 
 export default function AdminDashboard() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const activeTab = (searchParams.get('tab') as 'realtime' | 'history' | 'crm' | 'settings' | 'users') || 'realtime';
-  const setActiveTab = (tab: 'realtime' | 'history' | 'crm' | 'settings' | 'users') => setSearchParams({ tab });
+  const activeTab = (searchParams.get('tab') as 'realtime' | 'history' | 'crm' | 'settings' | 'loyalty' | 'users') || 'realtime';
+  const setActiveTab = (tab: 'realtime' | 'history' | 'crm' | 'settings' | 'loyalty' | 'users') => setSearchParams({ tab });
   const [allOrders, setAllOrders] = useState<Order[]>([]);
   const [finances, setFinances] = useState<FinanceEntry[]>([]);
   const [users, setUsers] = useState<any[]>([]);
@@ -99,7 +102,15 @@ export default function AdminDashboard() {
     address: "Avenida Prefeito José Amorim, Nº 500, Jardim Meriti, São João de Meriti - RJ",
     pixKey: "12.345.678/0001-90",
     pixKeyName: "SENSAÇÃO GOUMERT Ltda",
-    openingHours: DEFAULT_OPENING_HOURS
+    openingHours: DEFAULT_OPENING_HOURS,
+    loyaltyEnabled: false,
+    loyaltySpendPerPoint: 10,
+    loyaltyPointsPerUnit: 1,
+    loyaltyRewards: [
+      { id: 'reward-30', pointsCost: 30, discountType: 'fixed', discountValue: 5, label: 'R$ 5,00 de desconto' },
+      { id: 'reward-50', pointsCost: 50, discountType: 'fixed', discountValue: 10, label: 'R$ 10,00 de desconto' },
+      { id: 'reward-100', pointsCost: 100, discountType: 'percent', discountValue: 20, label: '20% de desconto' }
+    ]
   });
   const [savingSettings, setSavingSettings] = useState(false);
   const [settingsSavedSuccess, setSettingsSavedSuccess] = useState(false);
@@ -217,6 +228,14 @@ export default function AdminDashboard() {
             { name: "JARDIM MERITI", fee: 7 },
             { name: "JARDIM BOTANICO", fee: 6 },
             { name: "OLAVO BILAC", fee: 10 }
+          ],
+          loyaltyEnabled: data.loyaltyEnabled || false,
+          loyaltySpendPerPoint: data.loyaltySpendPerPoint ?? 10,
+          loyaltyPointsPerUnit: data.loyaltyPointsPerUnit ?? 1,
+          loyaltyRewards: data.loyaltyRewards ?? [
+            { id: 'reward-30', pointsCost: 30, discountType: 'fixed', discountValue: 5, label: 'R$ 5,00 de desconto' },
+            { id: 'reward-50', pointsCost: 50, discountType: 'fixed', discountValue: 10, label: 'R$ 10,00 de desconto' },
+            { id: 'reward-100', pointsCost: 100, discountType: 'percent', discountValue: 20, label: '20% de desconto' }
           ]
         });
 
@@ -687,10 +706,22 @@ export default function AdminDashboard() {
         </button>
 
         <button
+          onClick={() => setActiveTab('loyalty')}
+          className={`px-4 py-2.5 text-xs font-black uppercase tracking-wider border-b-2 transition-all flex items-center gap-2 ${
+            activeTab === 'loyalty'
+              ? 'border-brand text-brand bg-brand/5'
+              : 'border-transparent text-gray-500 hover:text-gray-900 hover:bg-gray-50'
+          }`}
+        >
+          <Gift size={16} />
+          <span>Fidelidade</span>
+        </button>
+
+        <button
           onClick={() => setActiveTab('users')}
           className={`px-4 py-2.5 text-xs font-black uppercase tracking-wider border-b-2 transition-all flex items-center gap-2 ${
-            activeTab === 'users' 
-              ? 'border-brand text-brand bg-brand/5' 
+            activeTab === 'users'
+              ? 'border-brand text-brand bg-brand/5'
               : 'border-transparent text-gray-500 hover:text-gray-900 hover:bg-gray-50'
           }`}
         >
@@ -1743,6 +1774,170 @@ export default function AdminDashboard() {
               </button>
             </div>
           </form>
+        </div>
+      )}
+
+      {/* TAB: LOYALTY / REWARDS PROGRAM */}
+      {activeTab === 'loyalty' && (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 space-y-8">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-sm font-black text-gray-900 uppercase tracking-wider">Programa de Fidelidade</h2>
+              <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mt-1">Clientes ganham pontos a cada pedido concluído e trocam por descontos</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setCompanyInfo(prev => ({ ...prev, loyaltyEnabled: !prev.loyaltyEnabled }))}
+              className={`px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-colors ${
+                companyInfo.loyaltyEnabled ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-500'
+              }`}
+            >
+              {companyInfo.loyaltyEnabled ? 'Ativado' : 'Desativado'}
+            </button>
+          </div>
+
+          <div>
+            <h3 className="text-xs font-black text-gray-900 uppercase tracking-wider mb-1">Forma de ganhar pontos</h3>
+            <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mb-3">Configure a forma como os clientes ganham pontos</p>
+            <div className="flex flex-wrap items-center gap-2 bg-gray-50 border border-gray-100 rounded-xl p-4 text-sm font-bold text-gray-700">
+              <span>R$</span>
+              <input
+                type="number"
+                min="1"
+                step="0.01"
+                value={companyInfo.loyaltySpendPerPoint ?? 10}
+                onChange={e => setCompanyInfo(prev => ({ ...prev, loyaltySpendPerPoint: parseFloat(e.target.value) || 1 }))}
+                className="w-20 px-2 py-1.5 border border-gray-200 rounded-lg text-center"
+              />
+              <span>gasto(s) por pedido =</span>
+              <Star size={16} className="text-amber-500 fill-amber-500" />
+              <input
+                type="number"
+                min="1"
+                step="1"
+                value={companyInfo.loyaltyPointsPerUnit ?? 1}
+                onChange={e => setCompanyInfo(prev => ({ ...prev, loyaltyPointsPerUnit: parseInt(e.target.value) || 1 }))}
+                className="w-16 px-2 py-1.5 border border-gray-200 rounded-lg text-center"
+              />
+              <span>ponto(s)</span>
+            </div>
+          </div>
+
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <div>
+                <h3 className="text-xs font-black text-gray-900 uppercase tracking-wider">Recompensas</h3>
+                <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Configure as recompensas que os clientes recebem ao gastar seus pontos</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setCompanyInfo(prev => ({
+                  ...prev,
+                  loyaltyRewards: [
+                    ...(prev.loyaltyRewards || []),
+                    { id: `reward-${Date.now()}`, pointsCost: 10, discountType: 'fixed', discountValue: 5, label: 'Nova recompensa' }
+                  ]
+                }))}
+                className="bg-brand text-white p-2 rounded-lg hover:bg-brand-dark transition-colors"
+                title="Adicionar recompensa"
+              >
+                <Plus size={16} />
+              </button>
+            </div>
+
+            <div className="space-y-2 mt-3">
+              {(companyInfo.loyaltyRewards || []).map(reward => (
+                <div key={reward.id} className="flex flex-wrap items-center gap-2 bg-gray-50 border border-gray-100 rounded-xl p-3">
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <Star size={14} className="text-amber-500 fill-amber-500" />
+                    <input
+                      type="number"
+                      min="1"
+                      value={reward.pointsCost}
+                      onChange={e => setCompanyInfo(prev => ({
+                        ...prev,
+                        loyaltyRewards: (prev.loyaltyRewards || []).map(r => r.id === reward.id ? { ...r, pointsCost: parseInt(e.target.value) || 1 } : r)
+                      }))}
+                      className="w-16 px-2 py-1.5 border border-gray-200 rounded-lg text-center text-xs font-bold"
+                    />
+                    <span className="text-[10px] text-gray-500 font-bold uppercase">pts</span>
+                  </div>
+
+                  <select
+                    value={reward.discountType}
+                    onChange={e => setCompanyInfo(prev => ({
+                      ...prev,
+                      loyaltyRewards: (prev.loyaltyRewards || []).map(r => r.id === reward.id ? { ...r, discountType: e.target.value as 'fixed' | 'percent' } : r)
+                    }))}
+                    className="px-2 py-1.5 border border-gray-200 rounded-lg text-xs font-bold shrink-0"
+                  >
+                    <option value="fixed">R$ Fixo</option>
+                    <option value="percent">% Percentual</option>
+                  </select>
+
+                  <div className="flex items-center gap-1 shrink-0">
+                    {reward.discountType === 'fixed' && <span className="text-xs font-bold text-gray-500">R$</span>}
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={reward.discountValue}
+                      onChange={e => setCompanyInfo(prev => ({
+                        ...prev,
+                        loyaltyRewards: (prev.loyaltyRewards || []).map(r => r.id === reward.id ? { ...r, discountValue: parseFloat(e.target.value) || 0 } : r)
+                      }))}
+                      className="w-20 px-2 py-1.5 border border-gray-200 rounded-lg text-center text-xs font-bold"
+                    />
+                    {reward.discountType === 'percent' && <span className="text-xs font-bold text-gray-500">%</span>}
+                  </div>
+
+                  <input
+                    type="text"
+                    value={reward.label}
+                    onChange={e => setCompanyInfo(prev => ({
+                      ...prev,
+                      loyaltyRewards: (prev.loyaltyRewards || []).map(r => r.id === reward.id ? { ...r, label: e.target.value } : r)
+                    }))}
+                    placeholder="Nome da recompensa (mostrado ao cliente)"
+                    className="flex-1 min-w-[160px] px-2 py-1.5 border border-gray-200 rounded-lg text-xs font-bold"
+                  />
+
+                  <button
+                    type="button"
+                    onClick={() => setCompanyInfo(prev => ({
+                      ...prev,
+                      loyaltyRewards: (prev.loyaltyRewards || []).filter(r => r.id !== reward.id)
+                    }))}
+                    className="p-1.5 text-red-500 hover:bg-red-50 rounded-md shrink-0"
+                    title="Remover"
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+              ))}
+              {(companyInfo.loyaltyRewards || []).length === 0 && (
+                <div className="text-center py-6 text-[10px] text-gray-400 uppercase tracking-widest font-bold">
+                  Nenhuma recompensa cadastrada.
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="pt-4 border-t border-gray-100 flex justify-end">
+            <button
+              type="button"
+              onClick={() => handleSaveSettings()}
+              disabled={savingSettings}
+              className="bg-brand text-white text-xs font-black uppercase tracking-widest px-6 py-2.5 rounded-lg hover:bg-brand-dark flex items-center gap-2 transition-colors disabled:opacity-50 shadow-sm"
+            >
+              {savingSettings ? (
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              ) : (
+                <Save size={16} />
+              )}
+              <span>Salvar Configurações</span>
+            </button>
+          </div>
         </div>
       )}
     </div>

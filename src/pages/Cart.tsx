@@ -5,9 +5,9 @@ import { formatCurrency, calculateDistance, formatSizeLabel } from '../lib/utils
 import { collection, addDoc, doc, onSnapshot } from 'firebase/firestore';
 import { db, sanitizeForFirestore } from '../lib/firebase';
 import { useNavigate } from 'react-router-dom';
-import { Trash2, MapPin, Phone, User as UserIcon, Edit2, CreditCard, DollarSign, QrCode, MessageSquare, MessageCircle, AlertCircle, Check, X, Image as ImageIcon, Truck, ShoppingBag, UtensilsCrossed, Store } from 'lucide-react';
+import { Trash2, MapPin, Phone, User as UserIcon, Edit2, CreditCard, DollarSign, QrCode, MessageSquare, MessageCircle, AlertCircle, Check, X, Image as ImageIcon, Truck, ShoppingBag, UtensilsCrossed, Store, Gift, Star } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { CompanyInfo, ServiceType } from '../types';
+import { CompanyInfo, ServiceType, LoyaltyReward } from '../types';
 import { ProductModal } from '../components/ProductModal';
 import { isStoreOpen } from '../lib/openingHours';
 
@@ -26,6 +26,7 @@ export default function Cart() {
   const navigate = useNavigate();
   const [editingItemIndex, setEditingItemIndex] = useState<number | null>(null);
   const [pendingWhatsappOrder, setPendingWhatsappOrder] = useState<{ orderId: string; whatsappUrl: string } | null>(null);
+  const [selectedRewardId, setSelectedRewardId] = useState<string | null>(null);
 
   useEffect(() => {
     const unsub = onSnapshot(doc(db, 'settings', 'company_info'), (snapshot) => {
@@ -68,6 +69,32 @@ export default function Cart() {
     }
     return { calculatedDeliveryFee: companyInfo?.deliveryFee || 0, isNeighborhoodExplicitlyAllowed: false };
   }, [serviceType, companyInfo, user?.addressNeighborhood]);
+
+  const userPoints = user?.points || 0;
+  const availableRewards = companyInfo?.loyaltyEnabled ? (companyInfo.loyaltyRewards || []) : [];
+  const selectedReward: LoyaltyReward | null = selectedRewardId
+    ? availableRewards.find(r => r.id === selectedRewardId) || null
+    : null;
+
+  const preDiscountTotal = total + calculatedDeliveryFee;
+  const computeRewardDiscount = (reward: LoyaltyReward) =>
+    reward.discountType === 'percent' ? preDiscountTotal * (reward.discountValue / 100) : reward.discountValue;
+
+  const rewardDiscount = selectedReward ? computeRewardDiscount(selectedReward) : 0;
+  const displayFinalTotal = Math.max(0, preDiscountTotal - rewardDiscount);
+
+  // Among the rewards the customer can actually afford, flag whichever one
+  // saves them the most money so they don't have to compare percent vs.
+  // fixed discounts themselves.
+  const bestRewardId = React.useMemo(() => {
+    const affordable = availableRewards.filter(r => userPoints >= r.pointsCost);
+    if (affordable.length < 2) return null;
+    let best = affordable[0];
+    for (const r of affordable.slice(1)) {
+      if (computeRewardDiscount(r) > computeRewardDiscount(best)) best = r;
+    }
+    return best.id;
+  }, [availableRewards, userPoints, preDiscountTotal]);
 
   // Keep address synchronized with user profile data when loaded/changed
   useEffect(() => {
@@ -175,7 +202,21 @@ export default function Cart() {
       }
     }
 
-    const finalTotal = total + finalDeliveryFee;
+    if (selectedReward && userPoints < selectedReward.pointsCost) {
+      setAlertState({
+        type: 'error',
+        message: 'Pontos insuficientes',
+        submessage: 'Você não tem pontos suficientes para essa recompensa.'
+      });
+      setLoading(false);
+      return;
+    }
+
+    const preDiscountTotal = total + finalDeliveryFee;
+    const finalTotal = Math.max(0, preDiscountTotal - rewardDiscount);
+    const pointsEarned = companyInfo?.loyaltyEnabled
+      ? Math.floor(finalTotal / (companyInfo.loyaltySpendPerPoint || 10)) * (companyInfo.loyaltyPointsPerUnit || 1)
+      : 0;
 
     if (paymentMethod === 'cash' && needChange === true) {
       if (!parsedChangeFor || parsedChangeFor <= finalTotal) {
@@ -211,6 +252,9 @@ export default function Cart() {
         changeFor: parsedChangeFor,
         address: orderAddressText,
         notes: notes.trim() || null,
+        pointsEarned,
+        pointsRedeemed: selectedReward?.pointsCost || 0,
+        rewardApplied: selectedReward ? { id: selectedReward.id, label: selectedReward.label, discountAmount: rewardDiscount } : null,
         createdAt: Date.now(),
         updatedAt: Date.now()
       });
@@ -405,10 +449,16 @@ ${window.location.origin}/orders/${orderRef.id}`;
                 : 'Grátis'}
             </span>
           </div>
+          {selectedReward && (
+            <div className="flex justify-between items-center text-sm">
+              <span className="text-emerald-600 font-bold">Desconto ({selectedReward.label})</span>
+              <span className="font-black text-emerald-600">-{formatCurrency(rewardDiscount)}</span>
+            </div>
+          )}
           <div className="flex justify-between items-center mt-2 pt-2 border-t border-gray-200">
             <span className="text-xs font-bold text-gray-500 uppercase tracking-widest">Total</span>
             <span className="text-lg font-black text-brand">
-              {formatCurrency(total + calculatedDeliveryFee)}
+              {formatCurrency(displayFinalTotal)}
             </span>
           </div>
         </div>
@@ -605,12 +655,62 @@ ${window.location.origin}/orders/${orderRef.id}`;
         </div>
       </div>
 
+      {/* Fidelidade */}
+      {companyInfo?.loyaltyEnabled && (
+        <div className="bg-white shadow-sm rounded-xl border border-gray-100 p-5 mb-6">
+          <h3 className="text-xs font-black text-gray-900 uppercase tracking-widest flex items-center gap-2 mb-4 border-b border-gray-50 pb-3">
+            <Gift size={14} className="text-brand" /> Fidelidade
+          </h3>
+          <div className="flex items-center justify-between mb-4 bg-amber-50 border border-amber-100 rounded-lg px-4 py-3">
+            <span className="text-xs font-bold text-amber-900 flex items-center gap-2">
+              <Star size={14} className="text-amber-500 fill-amber-500" /> Seus pontos
+            </span>
+            <span className="text-sm font-black text-amber-900">{userPoints} pts</span>
+          </div>
+          {availableRewards.length > 0 ? (
+            <div className="space-y-2">
+              {availableRewards.map(reward => {
+                const affordable = userPoints >= reward.pointsCost;
+                const isSelected = selectedRewardId === reward.id;
+                const isBest = affordable && reward.id === bestRewardId;
+                return (
+                  <button
+                    key={reward.id}
+                    type="button"
+                    disabled={!affordable}
+                    onClick={() => setSelectedRewardId(isSelected ? null : reward.id)}
+                    className={`w-full flex items-center justify-between px-4 py-3 rounded-lg border text-left transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-50 ${
+                      isSelected ? 'border-brand bg-brand/5' : isBest ? 'border-amber-300 bg-amber-50/60' : 'border-gray-200 bg-white hover:border-gray-300'
+                    }`}
+                  >
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <p className="text-xs font-black text-gray-900">{reward.label}</p>
+                        {isBest && (
+                          <span className="inline-flex items-center gap-1 bg-amber-400 text-amber-950 text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded-full">
+                            <Star size={9} className="fill-amber-950" /> Melhor oferta
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mt-0.5">{reward.pointsCost} pts</p>
+                    </div>
+                    {isSelected && <Check size={16} className="text-brand shrink-0" />}
+                  </button>
+                );
+              })}
+            </div>
+          ) : (
+            <p className="text-xs text-gray-400 font-bold">Nenhuma recompensa disponível no momento.</p>
+          )}
+        </div>
+      )}
+
       {/* Forma de Pagamento */}
       <div className="bg-white shadow-sm rounded-xl border border-gray-100 p-5 mb-6">
         <h3 className="text-xs font-black text-gray-900 uppercase tracking-widest flex items-center gap-2 mb-4 border-b border-gray-50 pb-3">
           <CreditCard size={14} className="text-brand" /> Forma de Pagamento
         </h3>
-        
+
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           <button
             type="button"
@@ -733,9 +833,9 @@ ${window.location.origin}/orders/${orderRef.id}`;
                     className="w-full pl-9 pr-3 py-2 border border-gray-200 focus:border-brand focus:ring-brand rounded-lg text-xs font-bold bg-white"
                   />
                 </div>
-                {changeFor && parseFloat(changeFor.replace(',', '.')) <= (total + calculatedDeliveryFee) && (
+                {changeFor && parseFloat(changeFor.replace(',', '.')) <= displayFinalTotal && (
                   <p className="text-[9px] text-red-500 font-bold uppercase tracking-wider">
-                    O valor para o troco deve ser maior que o total do pedido ({formatCurrency(total + calculatedDeliveryFee)}).
+                    O valor para o troco deve ser maior que o total do pedido ({formatCurrency(displayFinalTotal)}).
                   </p>
                 )}
               </div>
@@ -770,7 +870,7 @@ ${window.location.origin}/orders/${orderRef.id}`;
                   closedBlock ||
                   isProfileIncomplete || 
                   (paymentMethod === 'cash' && needChange === null) ||
-                  (paymentMethod === 'cash' && needChange === true && (!changeFor.trim() || parseFloat(changeFor.replace(',', '.')) <= (total + calculatedDeliveryFee)))
+                  (paymentMethod === 'cash' && needChange === true && (!changeFor.trim() || parseFloat(changeFor.replace(',', '.')) <= displayFinalTotal))
                 }
                 className="w-full sm:w-auto bg-brand text-white px-8 py-3 rounded-lg font-bold text-xs uppercase tracking-widest disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-sm cursor-pointer"
               >
