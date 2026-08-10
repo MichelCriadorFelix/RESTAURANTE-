@@ -5,7 +5,7 @@ import { formatCurrency, calculateDistance, formatSizeLabel } from '../lib/utils
 import { collection, addDoc, doc, onSnapshot } from 'firebase/firestore';
 import { db, sanitizeForFirestore } from '../lib/firebase';
 import { useNavigate } from 'react-router-dom';
-import { Trash2, MapPin, Phone, User as UserIcon, Edit2, CreditCard, DollarSign, QrCode, MessageSquare, AlertCircle, Check, X, Image as ImageIcon, Truck, ShoppingBag, UtensilsCrossed, Store } from 'lucide-react';
+import { Trash2, MapPin, Phone, User as UserIcon, Edit2, CreditCard, DollarSign, QrCode, MessageSquare, MessageCircle, AlertCircle, Check, X, Image as ImageIcon, Truck, ShoppingBag, UtensilsCrossed, Store } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { CompanyInfo, ServiceType } from '../types';
 import { ProductModal } from '../components/ProductModal';
@@ -25,6 +25,7 @@ export default function Cart() {
   const [companyInfo, setCompanyInfo] = useState<CompanyInfo | null>(null);
   const navigate = useNavigate();
   const [editingItemIndex, setEditingItemIndex] = useState<number | null>(null);
+  const [pendingWhatsappOrder, setPendingWhatsappOrder] = useState<{ orderId: string; whatsappUrl: string } | null>(null);
 
   useEffect(() => {
     const unsub = onSnapshot(doc(db, 'settings', 'company_info'), (snapshot) => {
@@ -241,13 +242,18 @@ ${items.map(item => `${item.quantity}x ${item.product.name}`).join('\n')}
 *Acompanhe o pedido:*
 ${window.location.origin}/orders/${orderRef.id}`;
 
-        const phone = companyInfo.phone.replace(/\D/g, '');
+        // wa.me needs the full international number (country code first) —
+        // without the "55" prefix the link doesn't resolve to a valid chat.
+        const phone = '55' + companyInfo.phone.replace(/\D/g, '');
         const whatsappUrl = `https://wa.me/${phone}?text=${encodeURIComponent(orderText)}`;
-        
-        navigate(`/orders/${orderRef.id}`);
-        setTimeout(() => {
-          window.location.href = whatsappUrl;
-        }, 100);
+
+        // An automatic redirect/window.open right after an async addDoc()
+        // call is unreliable — most mobile browsers treat it as an
+        // unrequested popup and silently block it, so the WhatsApp message
+        // would never actually get sent. Instead, require a real tap on a
+        // button (a genuine user gesture, never blocked) before continuing
+        // to the order page — this is what makes the step dependable.
+        setPendingWhatsappOrder({ orderId: orderRef.id, whatsappUrl });
       } else {
         navigate(`/orders/${orderRef.id}`);
       }
@@ -735,6 +741,50 @@ ${window.location.origin}/orders/${orderRef.id}`;
           </>
         );
       })()}
+
+      {/* Mandatory WhatsApp confirmation step — the order is already saved
+          at this point; this just ensures the store also gets notified on
+          WhatsApp, via a real tap so it can't be silently popup-blocked. */}
+      <AnimatePresence>
+        {pendingWhatsappOrder && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[60] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4"
+          >
+            <motion.div
+              initial={{ scale: 0.95, y: 15, opacity: 0 }}
+              animate={{ scale: 1, y: 0, opacity: 1 }}
+              exit={{ scale: 0.95, y: 15, opacity: 0 }}
+              className="bg-white rounded-2xl shadow-2xl p-6 max-w-sm w-full border border-gray-100"
+            >
+              <div className="flex flex-col items-center text-center">
+                <div className="w-14 h-14 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mb-4">
+                  <MessageCircle size={28} className="stroke-[2.5]" />
+                </div>
+                <h3 className="text-sm font-black text-gray-900 uppercase tracking-wider mb-2">
+                  Pedido Registrado!
+                </h3>
+                <p className="text-xs text-gray-500 font-bold mb-6 leading-relaxed">
+                  Pra confirmar seu pedido, toque no botão abaixo e envie a mensagem que já preparamos no WhatsApp. É rapidinho!
+                </p>
+                <button
+                  onClick={() => {
+                    window.open(pendingWhatsappOrder.whatsappUrl, '_blank', 'noopener,noreferrer');
+                    navigate(`/orders/${pendingWhatsappOrder.orderId}`);
+                    setPendingWhatsappOrder(null);
+                  }}
+                  className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black uppercase tracking-widest rounded-xl shadow-md shadow-emerald-600/20 transition-all cursor-pointer active:scale-98 flex items-center justify-center gap-2"
+                >
+                  <MessageCircle size={16} />
+                  Confirmar no WhatsApp
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Floating Animated Toast Alert */}
       <AnimatePresence>

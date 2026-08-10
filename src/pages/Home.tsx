@@ -11,6 +11,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { isStoreOpen } from '../lib/openingHours';
 import { ProductModal } from '../components/ProductModal';
 import { StoreInfoModal } from '../components/StoreInfoModal';
+import { sortCategories, sortProductsByOrder } from '../lib/menuCategories';
 
 import { useNavigate } from 'react-router-dom';
 
@@ -102,39 +103,9 @@ export default function Home() {
   };
 
   const availableProducts = products.filter(p => p.available);
-  
-  // Define a default order or just use the extracted ones.
-  const ORDERED_CATEGORIES = [
-    'MONTE SUA MASSA',
-    'STROGONOFF',
-    'BATATAS RECHEADAS',
-    'LASANHAS',
-    'MOQUECA',
-    'PRATOS EXTRA',
-    'PETISCOS',
-    'PASTÉIS',
-    'BEBIDAS'
-  ];
 
   const uniqueCategories = Array.from(new Set(availableProducts.map(p => p.category)));
-  
-  // Sort categories according to the requested order
-  const categories = uniqueCategories.sort((a, b) => {
-    let catA = a.toUpperCase();
-    let catB = b.toUpperCase();
-    
-    // Legacy mapping
-    if (catA.startsWith('MONTE SEU ')) catA = 'MONTE SUA MASSA';
-    if (catB.startsWith('MONTE SEU ')) catB = 'MONTE SUA MASSA';
-
-    const idxA = ORDERED_CATEGORIES.indexOf(catA);
-    const idxB = ORDERED_CATEGORIES.indexOf(catB);
-    
-    if (idxA !== -1 && idxB !== -1) return idxA - idxB;
-    if (idxA !== -1) return -1;
-    if (idxB !== -1) return 1;
-    return a.localeCompare(b);
-  });
+  const categories = sortCategories(uniqueCategories);
 
   const scrollToCategory = (categoryId: string) => {
     const element = document.getElementById(`category-${categoryId}`);
@@ -280,7 +251,7 @@ export default function Home() {
             <div key={category} id={`category-${category}`} className="scroll-mt-24">
               <h2 className="text-sm font-black text-gray-900 mb-4 uppercase tracking-widest">{category}</h2>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {availableProducts.filter(p => p.category === category).map(product => (
+                {sortProductsByOrder(availableProducts.filter(p => p.category === category)).map(product => (
                   <ProductCard 
                     key={product.id} 
                     product={product} 

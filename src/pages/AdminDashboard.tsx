@@ -3,7 +3,7 @@ import { collection, query, orderBy, onSnapshot, where, doc, setDoc, limit } fro
 
 import { db, sanitizeForFirestore, handleFirestoreError, OperationType } from '../lib/firebase';
 import { Order, FinanceEntry, CompanyInfo } from '../types';
-import { formatCurrency, formatSizeLabel } from '../lib/utils';
+import { formatCurrency, formatSizeLabel, compressAndUploadImage, migrateBase64ImageToStorage } from '../lib/utils';
 import { format, subDays } from 'date-fns';
 import { Link, useSearchParams } from 'react-router-dom';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
@@ -108,68 +108,9 @@ export default function AdminDashboard() {
   const [cepStatus, setCepStatus] = useState<{ type: 'idle' | 'loading' | 'success' | 'error', message: string }>({ type: 'idle', message: '' });
 
   const logoInputRef = useRef<HTMLInputElement>(null);
+  const migratingLogoRef = useRef(false);
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const [logoError, setLogoError] = useState(false);
-
-  // Helper to compress logo to max 400x400
-  const compressLogo = (file: File, maxWidth = 400, maxHeight = 400, quality = 0.85): Promise<string> => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.readAsDataURL(file);
-      reader.onload = (event) => {
-        const img = new Image();
-        img.src = event.target?.result as string;
-        img.onload = () => {
-          const canvas = document.createElement('canvas');
-          let width = img.width;
-          let height = img.height;
-
-          if (width > height) {
-            if (width > maxWidth) {
-              height = Math.round((height * maxWidth) / width);
-              width = maxWidth;
-            }
-          } else {
-            if (height > maxHeight) {
-              width = Math.round((width * maxHeight) / height);
-              height = maxHeight;
-            }
-          }
-
-          canvas.width = width;
-          canvas.height = height;
-          const ctx = canvas.getContext('2d');
-          if (!ctx) {
-            resolve(event.target?.result as string);
-            return;
-          }
-
-          ctx.drawImage(img, 0, 0, width, height);
-          const dataUrl = canvas.toDataURL('image/jpeg', quality);
-          resolve(dataUrl);
-        };
-        img.onerror = (err) => reject(err);
-      };
-      reader.onerror = (err) => reject(err);
-    });
-  };
-
-  const base64ToBlob = (base64: string): Blob => {
-    try {
-      const parts = base64.split(';base64,');
-      const contentType = parts[0].split(':')[1];
-      const raw = window.atob(parts[1]);
-      const rawLength = raw.length;
-      const uInt8Array = new Uint8Array(rawLength);
-      for (let i = 0; i < rawLength; ++i) {
-        uInt8Array[i] = raw.charCodeAt(i);
-      }
-      return new Blob([uInt8Array], { type: contentType });
-    } catch (e) {
-      console.error('Error converting base64 to blob:', e);
-      return new Blob([], { type: 'image/jpeg' });
-    }
-  };
 
   const handleLogoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -177,8 +118,8 @@ export default function AdminDashboard() {
 
     setUploadingLogo(true);
     try {
-      const compressedBase64 = await compressLogo(file);
-      setCompanyInfo(prev => ({ ...prev, logoUrl: compressedBase64 }));
+      const url = await compressAndUploadImage(file, `settings/logo-${Date.now()}.jpg`, 400, 400, 0.85);
+      setCompanyInfo(prev => ({ ...prev, logoUrl: url }));
     } catch (err) {
       console.error('Error uploading logo:', err);
       alert('Erro ao enviar a logomarca.');
@@ -278,6 +219,19 @@ export default function AdminDashboard() {
             { name: "OLAVO BILAC", fee: 10 }
           ]
         });
+
+        // Self-healing migration: an old logo saved as base64 directly on
+        // this document makes it huge, and this same doc is fetched on
+        // nearly every page in the app — that's the main reason the whole
+        // app (not just the menu) can take a long time to load. Move it to
+        // Storage once and swap in the short URL.
+        if (data.logoUrl?.startsWith('data:image') && !migratingLogoRef.current) {
+          migratingLogoRef.current = true;
+          migrateBase64ImageToStorage(data.logoUrl, `settings/logo-${Date.now()}.jpg`)
+            .then(url => setDoc(doc(db, 'settings', 'company_info'), { logoUrl: url }, { merge: true }))
+            .catch(err => console.error('Falha ao migrar a logo da empresa', err))
+            .finally(() => { migratingLogoRef.current = false; });
+        }
       }
     }, (err) => {
       handleFirestoreError(err, OperationType.GET, 'settings/company_info');
@@ -331,13 +285,18 @@ export default function AdminDashboard() {
       });
 
       if (hasNewRecentOrder) {
-        // removed old sound
+        startRing();
         if ('Notification' in window && Notification.permission === 'granted') {
           new Notification('Novo Pedido Recebido!', {
             body: 'Você recebeu um novo pedido para analisar.',
-            icon: '/icon-192.png'
+            icon: 'https://raw.githubusercontent.com/MichelCriadorFelix/RESTAURANTE-/1975716dd80f7c608f07a4d6ebb4628f6da7d780/public/icon-192.png'
           });
         }
+      }
+
+      // Stop the ring once there are no more orders waiting on the admin
+      if (pending === 0) {
+        stopRing();
       }
 
       setStats({ pending, preparing, todayTotal });
@@ -357,6 +316,7 @@ export default function AdminDashboard() {
       unsubFinances();
       unsubscribeOrders();
       unsubUsers();
+      stopRing();
     };
   }, []);
 

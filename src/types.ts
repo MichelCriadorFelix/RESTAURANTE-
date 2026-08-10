@@ -46,6 +46,7 @@ export interface Product {
   priceOption2?: number; // Legacy
   imageUrl?: string;
   customizationSteps?: CustomizationStep[];
+  sortOrder?: number;
 }
 
 export interface CartItem {

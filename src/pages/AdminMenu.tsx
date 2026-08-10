@@ -1,12 +1,13 @@
 import React, { useEffect, useState } from 'react';
-import { collection, query, onSnapshot, doc, updateDoc, deleteDoc, setDoc, addDoc } from 'firebase/firestore';
+import { collection, query, onSnapshot, doc, updateDoc, deleteDoc, setDoc, addDoc, writeBatch } from 'firebase/firestore';
 import { db, sanitizeForFirestore, handleFirestoreError, OperationType } from '../lib/firebase';
 import { Product } from '../types';
-import { formatCurrency, compressImage } from '../lib/utils';
+import { formatCurrency, compressAndUploadImage, migrateBase64ImageToStorage } from '../lib/utils';
 import { Edit, Trash2, Plus, X, Check, AlertTriangle, AlertCircle, Search, Image as ImageIcon, UploadCloud, ChevronUp, ChevronDown } from 'lucide-react';
 import { useRef } from 'react';
 import { initialMenu } from '../lib/seedData';
 import { AnimatePresence, motion } from 'framer-motion';
+import { sortCategories, sortProductsByOrder } from '../lib/menuCategories';
 
 export default function AdminMenu() {
   const [products, setProducts] = useState<Product[]>([]);
@@ -54,6 +55,24 @@ export default function AdminMenu() {
     return () => unsub();
   }, []);
 
+  // One-time, self-healing migration: older items still have their photo
+  // saved as a base64 string directly on the document (from before Storage
+  // uploads were wired up), which is what made the whole menu slow to load
+  // — every read had to transfer every embedded image. Whenever one shows
+  // up, move it to Storage in the background and swap in the short URL.
+  const migratingRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    products.forEach(product => {
+      if (product.imageUrl?.startsWith('data:image') && !migratingRef.current.has(product.id)) {
+        migratingRef.current.add(product.id);
+        migrateBase64ImageToStorage(product.imageUrl, `products/${product.id}-${Date.now()}.jpg`)
+          .then(url => updateDoc(doc(db, 'products', product.id), { imageUrl: url }))
+          .catch(err => console.error('Falha ao migrar imagem do produto', product.id, err))
+          .finally(() => migratingRef.current.delete(product.id));
+      }
+    });
+  }, [products]);
+
   const handleToggleAvailable = async (product: Product) => {
     try {
       await updateDoc(doc(db, 'products', product.id), { available: !product.available });
@@ -64,6 +83,35 @@ export default function AdminMenu() {
       });
     } catch (err) {
       handleFirestoreError(err, OperationType.UPDATE, `products/${product.id}`);
+    }
+  };
+
+  const handleMoveProduct = async (category: string, productId: string, direction: 'up' | 'down') => {
+    const group = sortProductsByOrder(products.filter(p => p.category === category));
+    const index = group.findIndex(p => p.id === productId);
+    if (index === -1) return;
+    const swapIndex = direction === 'up' ? index - 1 : index + 1;
+    if (swapIndex < 0 || swapIndex >= group.length) return;
+
+    try {
+      const batch = writeBatch(db);
+      // If this category was never manually ordered, backfill sortOrder for
+      // every item in it (using the current, stable display order) before
+      // swapping — otherwise only the two swapped items would get an order
+      // and the rest would keep falling back to alphabetical.
+      const needsBackfill = group.some(p => p.sortOrder === undefined);
+      if (needsBackfill) {
+        group.forEach((p, i) => batch.update(doc(db, 'products', p.id), { sortOrder: i }));
+      }
+
+      const currentOrder = group[index].sortOrder ?? index;
+      const swapOrder = group[swapIndex].sortOrder ?? swapIndex;
+      batch.update(doc(db, 'products', group[index].id), { sortOrder: swapOrder });
+      batch.update(doc(db, 'products', group[swapIndex].id), { sortOrder: currentOrder });
+
+      await batch.commit();
+    } catch (err) {
+      handleFirestoreError(err, OperationType.UPDATE, `products/${productId}`);
     }
   };
 
@@ -224,12 +272,19 @@ export default function AdminMenu() {
     
     try {
       if (imageFile) {
-        imageUrl = await compressImage(imageFile, 800, 800, 0.7);
+        const storagePath = `products/${editingId || Date.now()}-${Date.now()}.jpg`;
+        imageUrl = await compressAndUploadImage(imageFile, storagePath, 800, 800, 0.7);
       }
 
-      const updatedFormData = { ...formData, imageUrl };
+      let updatedFormData: Partial<Product> = { ...formData, imageUrl };
+      if (!editingId) {
+        // New items go to the end of their category's current order.
+        const categoryPeers = products.filter(p => p.category === updatedFormData.category);
+        const maxOrder = categoryPeers.reduce((max, p) => Math.max(max, p.sortOrder ?? -1), -1);
+        updatedFormData = { ...updatedFormData, sortOrder: maxOrder + 1 };
+      }
       const sanitizedData = sanitizeForFirestore(updatedFormData);
-      
+
       if (editingId) {
         await updateDoc(doc(db, 'products', editingId), sanitizedData as any);
         setAlert({
@@ -261,11 +316,11 @@ export default function AdminMenu() {
 
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
 
-  const categories = Array.from(new Set(products.map(p => p.category))).filter(Boolean);
+  const categories = sortCategories(Array.from(new Set(products.map(p => p.category))).filter(Boolean));
 
   const filteredProducts = products.filter(product => {
-    const matchesSearch = 
-      product.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+    const matchesSearch =
+      product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       (product.description && product.description.toLowerCase().includes(searchQuery.toLowerCase())) ||
       (product.category && product.category.toLowerCase().includes(searchQuery.toLowerCase()));
 
@@ -276,6 +331,13 @@ export default function AdminMenu() {
 
     return true;
   });
+
+  // The grouped-by-category view (with reorder controls) is only shown for
+  // the natural, unfiltered "all categories" view — exactly what the
+  // customer sees. Any search or specific filter falls back to a flat grid,
+  // since reordering only makes sense against a full, stable category.
+  const isGroupedView = selectedCategory === 'all' && searchQuery.trim() === '';
+  const groupedCategories = isGroupedView ? categories : [];
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-8">
@@ -549,166 +611,55 @@ export default function AdminMenu() {
           </div>
         </div>
 
-        {/* MOBILE VIEW (Cards layout for small screens) */}
-        <div className="block md:hidden divide-y divide-gray-100">
-          {filteredProducts.length > 0 ? (
-            filteredProducts.map(product => (
-              <div key={product.id} className="p-4 hover:bg-gray-50/50 transition-colors">
-                <div className="flex items-start gap-3 mb-2">
-                  {product.imageUrl ? (
-                    <div className="w-16 h-16 rounded-xl overflow-hidden bg-gray-100 shrink-0 border border-gray-200">
-                      <img src={product.imageUrl} alt={product.name} className="w-full h-full object-cover" />
-                    </div>
-                  ) : (
-                    <div className="w-16 h-16 rounded-xl bg-gray-100 shrink-0 border border-gray-200 flex items-center justify-center text-gray-300">
-                      <ImageIcon size={24} />
-                    </div>
-                  )}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap mb-1">
-                      <h3 className="text-sm font-black text-gray-900 leading-snug" translate="no">
-                        {product.name}
-                      </h3>
-                      <span className="text-[9px] font-extrabold uppercase tracking-widest px-2 py-0.5 rounded bg-gray-100 text-gray-600 border border-gray-200/60">
-                        {product.category || 'Sem Categoria'}
-                      </span>
-                    </div>
-                    {product.description && (
-                      <p className="text-xs text-gray-500 line-clamp-2 mb-2 leading-relaxed">
-                        {product.description}
-                      </p>
-                    )}
-                  </div>
-                </div>
-
-                {/* Price and Options */}
-                <div className="bg-gray-50 rounded-xl p-2.5 mb-3 border border-gray-100/80 flex items-center justify-between">
-                  <div>
-                    <span className="text-[9px] font-bold text-gray-400 uppercase tracking-widest block">Preço</span>
-                    <span className="text-sm font-black text-gray-900">
-                      {formatCurrency(product.price)}
-                    </span>
-                  </div>
-                  {product.priceOption2 && (
-                    <div className="text-right">
-                      <span className="text-[9px] font-bold text-brand uppercase tracking-widest block">2 Pedaços</span>
-                      <span className="text-xs font-black text-brand">
-                        {formatCurrency(product.priceOption2)}
-                      </span>
-                    </div>
-                  )}
-                </div>
-
-                {/* Action Row */}
-                <div className="flex items-center justify-between gap-2 pt-1">
-                  <button 
-                    onClick={() => handleToggleAvailable(product)}
-                    className={`flex-1 min-h-[38px] px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all active:scale-98 ${
-                      product.available 
-                        ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100' 
-                        : 'bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100'
-                    }`}
-                  >
-                    <span className={`w-2 h-2 rounded-full ${product.available ? 'bg-emerald-500' : 'bg-rose-500'}`} />
-                    {product.available ? 'Disponível' : 'Indisponível'}
-                  </button>
-
-                  <div className="flex items-center gap-1 shrink-0">
-                    <button 
-                      onClick={() => handleEdit(product)} 
-                      className="min-h-[38px] px-3 bg-gray-100 hover:bg-brand/10 hover:text-brand text-gray-700 text-xs font-bold rounded-xl flex items-center gap-1 transition-colors active:scale-98"
-                      title="Editar"
-                    >
-                      <Edit size={15} />
-                      <span className="text-[10px] uppercase font-black">Editar</span>
-                    </button>
-                    <button 
-                      onClick={() => handleDeleteAttempt(product)} 
-                      className="min-h-[38px] px-3 bg-red-50 hover:bg-red-100 text-red-600 text-xs font-bold rounded-xl flex items-center gap-1 transition-colors active:scale-98"
-                      title="Excluir"
-                    >
-                      <Trash2 size={15} />
-                    </button>
-                  </div>
-                </div>
-              </div>
-            ))
-          ) : (
+        {/* Product listing — grouped by category (same order customers see)
+            with reorder controls when browsing the full, unfiltered menu;
+            a flat grid when searching or filtering to one category. */}
+        <div className="p-4">
+          {filteredProducts.length === 0 ? (
             <div className="p-8 text-center text-xs font-bold text-gray-400 uppercase tracking-widest">
               Nenhum item encontrado.
             </div>
+          ) : isGroupedView ? (
+            <div className="space-y-8">
+              {groupedCategories.map(category => {
+                const group = sortProductsByOrder(products.filter(p => p.category === category));
+                return (
+                  <div key={category}>
+                    <h2 className="text-sm font-black text-gray-900 mb-3 uppercase tracking-widest">
+                      {category || 'Sem Categoria'} <span className="text-gray-400 font-bold">({group.length})</span>
+                    </h2>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {group.map((product, index) => (
+                        <ProductAdminCard
+                          key={product.id}
+                          product={product}
+                          onToggleAvailable={() => handleToggleAvailable(product)}
+                          onEdit={() => handleEdit(product)}
+                          onDelete={() => handleDeleteAttempt(product)}
+                          onMoveUp={() => handleMoveProduct(category, product.id, 'up')}
+                          onMoveDown={() => handleMoveProduct(category, product.id, 'down')}
+                          canMoveUp={index > 0}
+                          canMoveDown={index < group.length - 1}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {filteredProducts.map(product => (
+                <ProductAdminCard
+                  key={product.id}
+                  product={product}
+                  onToggleAvailable={() => handleToggleAvailable(product)}
+                  onEdit={() => handleEdit(product)}
+                  onDelete={() => handleDeleteAttempt(product)}
+                />
+              ))}
+            </div>
           )}
-        </div>
-
-        {/* DESKTOP VIEW (Table with horizontal scroll fallback) */}
-        <div className="hidden md:block overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-100">
-            <thead className="bg-gray-50 border-b border-gray-100">
-              <tr>
-                <th className="px-4 py-3 text-left text-[10px] font-bold text-gray-500 uppercase tracking-widest">Item</th>
-                <th className="px-4 py-3 text-left text-[10px] font-bold text-gray-500 uppercase tracking-widest">Categoria</th>
-                <th className="px-4 py-3 text-left text-[10px] font-bold text-gray-500 uppercase tracking-widest">Preço</th>
-                <th className="px-4 py-3 text-left text-[10px] font-bold text-gray-500 uppercase tracking-widest">Status</th>
-                <th className="px-4 py-3 text-right text-[10px] font-bold text-gray-500 uppercase tracking-widest">Ações</th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-50">
-              {filteredProducts.length > 0 ? (
-                filteredProducts.map(product => (
-                  <tr key={product.id} className="hover:bg-gray-50/80 transition-colors">
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-3">
-                        {product.imageUrl ? (
-                          <div className="w-10 h-10 rounded-lg overflow-hidden bg-gray-100 shrink-0 border border-gray-200">
-                            <img src={product.imageUrl} alt={product.name} className="w-full h-full object-cover" />
-                          </div>
-                        ) : (
-                          <div className="w-10 h-10 rounded-lg bg-gray-100 shrink-0 border border-gray-200 flex items-center justify-center text-gray-300">
-                            <ImageIcon size={16} />
-                          </div>
-                        )}
-                        <div>
-                          <div className="text-xs font-bold text-gray-900 leading-tight" translate="no">{product.name}</div>
-                          <div className="text-[10px] text-gray-500 truncate max-w-[280px] mt-0.5">{product.description}</div>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 whitespace-nowrap text-[10px] font-bold uppercase tracking-widest text-gray-500">
-                      {product.category || 'Sem Categoria'}
-                    </td>
-                    <td className="px-4 py-3 whitespace-nowrap text-xs text-gray-900 font-black">
-                      {formatCurrency(product.price)}
-                      {product.priceOption2 && <span className="text-[9px] text-brand font-bold uppercase tracking-widest block mt-0.5">2 itens: {formatCurrency(product.priceOption2)}</span>}
-                    </td>
-                    <td className="px-4 py-3 whitespace-nowrap">
-                      <button 
-                        onClick={() => handleToggleAvailable(product)}
-                        className={`px-2.5 py-1 rounded-lg text-[9px] font-bold uppercase tracking-widest transition-colors cursor-pointer active:scale-95 ${
-                          product.available ? 'bg-green-100 text-green-800 hover:bg-green-200' : 'bg-red-100 text-red-800 hover:bg-red-200'
-                        }`}
-                      >
-                        {product.available ? 'Disponível' : 'Indisponível'}
-                      </button>
-                    </td>
-                    <td className="px-4 py-3 whitespace-nowrap text-right space-x-2">
-                      <button onClick={() => handleEdit(product)} className="text-gray-400 hover:text-brand inline-flex p-1.5 rounded-md hover:bg-brand/10 transition-colors">
-                        <Edit size={16} />
-                      </button>
-                      <button onClick={() => handleDeleteAttempt(product)} className="text-gray-400 hover:text-red-600 inline-flex p-1.5 rounded-md hover:bg-red-50 transition-colors">
-                        <Trash2 size={16} />
-                      </button>
-                    </td>
-                  </tr>
-                ))
-              ) : (
-                <tr>
-                  <td colSpan={5} className="px-4 py-8 text-center text-xs font-bold text-gray-400 uppercase tracking-widest">
-                    Nenhum item encontrado.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
         </div>
       </div>
 
@@ -817,6 +768,111 @@ export default function AdminMenu() {
           </motion.div>
         )}
       </AnimatePresence>
+    </div>
+  );
+}
+
+function ProductAdminCard({
+  product,
+  onToggleAvailable,
+  onEdit,
+  onDelete,
+  onMoveUp,
+  onMoveDown,
+  canMoveUp,
+  canMoveDown
+}: {
+  product: Product;
+  onToggleAvailable: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
+  onMoveUp?: () => void;
+  onMoveDown?: () => void;
+  canMoveUp?: boolean;
+  canMoveDown?: boolean;
+}) {
+  const showReorder = !!(onMoveUp && onMoveDown);
+  return (
+    <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-3 flex flex-col justify-between hover:shadow-md transition-shadow">
+      <div className="flex items-start gap-3 mb-2">
+        {showReorder && (
+          <div className="flex flex-col gap-0.5 shrink-0 pt-1">
+            <button
+              type="button"
+              onClick={onMoveUp}
+              disabled={!canMoveUp}
+              className="text-gray-400 hover:text-brand disabled:opacity-20 disabled:cursor-not-allowed p-1 rounded hover:bg-gray-50"
+              title="Mover para cima"
+            >
+              <ChevronUp size={16} />
+            </button>
+            <button
+              type="button"
+              onClick={onMoveDown}
+              disabled={!canMoveDown}
+              className="text-gray-400 hover:text-brand disabled:opacity-20 disabled:cursor-not-allowed p-1 rounded hover:bg-gray-50"
+              title="Mover para baixo"
+            >
+              <ChevronDown size={16} />
+            </button>
+          </div>
+        )}
+        {product.imageUrl ? (
+          <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-lg overflow-hidden bg-gray-100 shrink-0 border border-gray-200">
+            <img src={product.imageUrl} alt={product.name} className="w-full h-full object-cover" />
+          </div>
+        ) : (
+          <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-lg bg-gray-100 shrink-0 border border-gray-200 flex items-center justify-center text-gray-300">
+            <ImageIcon size={24} />
+          </div>
+        )}
+        <div className="flex-1 min-w-0">
+          <div className="flex justify-between items-start gap-2">
+            <h3 className="text-xs font-bold text-gray-900 leading-tight" translate="no">{product.name}</h3>
+            <div className="text-right shrink-0">
+              {product.priceOption2 !== undefined && <p className="text-[9px] text-brand font-bold uppercase tracking-widest">A partir de</p>}
+              <p className="text-sm font-black text-gray-900">{formatCurrency(product.price)}</p>
+            </div>
+          </div>
+          {!showReorder && (
+            <span className="inline-block mt-1 text-[9px] font-extrabold uppercase tracking-widest px-2 py-0.5 rounded bg-gray-100 text-gray-600 border border-gray-200/60">
+              {product.category || 'Sem Categoria'}
+            </span>
+          )}
+          {product.description && <p className="text-[9px] text-gray-500 mt-1 line-clamp-2">{product.description}</p>}
+        </div>
+      </div>
+
+      <div className="flex items-center justify-between gap-2 mt-2 pt-2 border-t border-gray-50">
+        <button
+          type="button"
+          onClick={onToggleAvailable}
+          className={`flex-1 min-h-[34px] px-2 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all active:scale-98 ${
+            product.available
+              ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100'
+              : 'bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100'
+          }`}
+        >
+          <span className={`w-1.5 h-1.5 rounded-full ${product.available ? 'bg-emerald-500' : 'bg-rose-500'}`} />
+          {product.available ? 'Disponível' : 'Indisponível'}
+        </button>
+        <button
+          type="button"
+          onClick={onEdit}
+          className="min-h-[34px] px-2.5 bg-gray-100 hover:bg-brand/10 hover:text-brand text-gray-700 rounded-lg flex items-center transition-colors active:scale-98"
+          title="Editar"
+        >
+          <Edit size={14} />
+        </button>
+        <button
+          type="button"
+          onClick={onDelete}
+          className="min-h-[34px] px-2.5 bg-red-50 hover:bg-red-100 text-red-600 rounded-lg flex items-center transition-colors active:scale-98"
+          title="Excluir"
+        >
+          <Trash2 size={14} />
+        </button>
+      </div>
     </div>
   );
 }
