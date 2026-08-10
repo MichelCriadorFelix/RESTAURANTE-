@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef, useMemo } from 'react';
-import { collection, query, orderBy, onSnapshot, where, doc, setDoc, limit } from 'firebase/firestore';
+import { collection, query, orderBy, onSnapshot, where, doc, setDoc, limit, increment } from 'firebase/firestore';
 
 import { db, sanitizeForFirestore, handleFirestoreError, OperationType } from '../lib/firebase';
 import { Order, FinanceEntry, CompanyInfo } from '../types';
@@ -85,6 +85,11 @@ const paymentMap = {
 };
 
 type PeriodType = 'day' | 'week' | 'month' | 'trimester' | 'semester' | 'year';
+
+const formatRewardLabel = (discountType: 'fixed' | 'percent', discountValue: number) =>
+  discountType === 'percent'
+    ? `${discountValue}% de desconto`
+    : `R$ ${discountValue.toFixed(2).replace('.', ',')} de desconto`;
 
 export default function AdminDashboard() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -1221,6 +1226,7 @@ export default function AdminDashboard() {
                   <tr className="border-b border-gray-200 bg-gray-50/40 text-[9px] font-black text-gray-400 uppercase tracking-widest">
                     <th className="p-4">Nome / E-mail</th>
                     <th className="p-4">Status de Acesso</th>
+                    <th className="p-4">Pontos de Fidelidade</th>
                     <th className="p-4">Desde</th>
                     <th className="p-4 text-center">Ações</th>
                   </tr>
@@ -1247,6 +1253,30 @@ export default function AdminDashboard() {
                         }`}>
                           {u.role === 'admin' ? 'Administrador' : 'Cliente / Usuário'}
                         </span>
+                      </td>
+                      <td className="p-4">
+                        <div className="flex items-center gap-2">
+                          <span className="font-black text-amber-700 flex items-center gap-1 text-xs">
+                            <Star size={12} className="fill-amber-500 text-amber-500" /> {u.points || 0}
+                          </span>
+                          <button
+                            onClick={async () => {
+                              const input = window.prompt(`Quantos pontos deseja adicionar para ${u.name}? (use um número negativo para remover)`, '10');
+                              if (input === null) return;
+                              const amount = parseInt(input, 10);
+                              if (!amount || isNaN(amount)) return;
+                              try {
+                                await setDoc(doc(db, 'users', u.id), { points: increment(amount) }, { merge: true });
+                              } catch (err) {
+                                handleFirestoreError(err, OperationType.UPDATE, `users/${u.id}`);
+                              }
+                            }}
+                            className="p-1 text-brand hover:bg-brand/10 rounded transition-colors"
+                            title="Adicionar ou remover pontos manualmente"
+                          >
+                            <Plus size={12} />
+                          </button>
+                        </div>
                       </td>
                       <td className="p-4 text-gray-400 text-[10px]">
                         {u.createdAt ? format(new Date(u.createdAt), 'dd/MM/yyyy') : 'N/A'}
@@ -1835,7 +1865,7 @@ export default function AdminDashboard() {
                   ...prev,
                   loyaltyRewards: [
                     ...(prev.loyaltyRewards || []),
-                    { id: `reward-${Date.now()}`, pointsCost: 10, discountType: 'fixed', discountValue: 5, label: 'Nova recompensa' }
+                    { id: `reward-${Date.now()}`, pointsCost: 10, discountType: 'fixed', discountValue: 5, label: formatRewardLabel('fixed', 5) }
                   ]
                 }))}
                 className="bg-brand text-white p-2 rounded-lg hover:bg-brand-dark transition-colors"
@@ -1867,7 +1897,11 @@ export default function AdminDashboard() {
                     value={reward.discountType}
                     onChange={e => setCompanyInfo(prev => ({
                       ...prev,
-                      loyaltyRewards: (prev.loyaltyRewards || []).map(r => r.id === reward.id ? { ...r, discountType: e.target.value as 'fixed' | 'percent' } : r)
+                      loyaltyRewards: (prev.loyaltyRewards || []).map(r => {
+                        if (r.id !== reward.id) return r;
+                        const discountType = e.target.value as 'fixed' | 'percent';
+                        return { ...r, discountType, label: formatRewardLabel(discountType, r.discountValue) };
+                      })
                     }))}
                     className="px-2 py-1.5 border border-gray-200 rounded-lg text-xs font-bold shrink-0"
                   >
@@ -1884,7 +1918,11 @@ export default function AdminDashboard() {
                       value={reward.discountValue}
                       onChange={e => setCompanyInfo(prev => ({
                         ...prev,
-                        loyaltyRewards: (prev.loyaltyRewards || []).map(r => r.id === reward.id ? { ...r, discountValue: parseFloat(e.target.value) || 0 } : r)
+                        loyaltyRewards: (prev.loyaltyRewards || []).map(r => {
+                          if (r.id !== reward.id) return r;
+                          const discountValue = parseFloat(e.target.value) || 0;
+                          return { ...r, discountValue, label: formatRewardLabel(r.discountType, discountValue) };
+                        })
                       }))}
                       className="w-20 px-2 py-1.5 border border-gray-200 rounded-lg text-center text-xs font-bold"
                     />
@@ -1894,6 +1932,7 @@ export default function AdminDashboard() {
                   <input
                     type="text"
                     value={reward.label}
+                    title="Gerado automaticamente a partir do tipo e valor do desconto — edite se quiser um texto diferente"
                     onChange={e => setCompanyInfo(prev => ({
                       ...prev,
                       loyaltyRewards: (prev.loyaltyRewards || []).map(r => r.id === reward.id ? { ...r, label: e.target.value } : r)

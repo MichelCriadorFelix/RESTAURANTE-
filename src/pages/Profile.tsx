@@ -1,10 +1,22 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { Save, MapPin, Phone, User as UserIcon, Search } from 'lucide-react';
+import { Save, MapPin, Phone, User as UserIcon, Search, Star } from 'lucide-react';
+import { doc, onSnapshot } from 'firebase/firestore';
+import { db } from '../lib/firebase';
 
 export default function Profile() {
   const { user, updateUser } = useAuth();
-  
+  const [loyaltyEnabled, setLoyaltyEnabled] = useState(false);
+
+  useEffect(() => {
+    const unsub = onSnapshot(doc(db, 'settings', 'company_info'), (snapshot) => {
+      if (snapshot.exists()) {
+        setLoyaltyEnabled(!!snapshot.data().loyaltyEnabled);
+      }
+    });
+    return () => unsub();
+  }, []);
+
   const [formData, setFormData] = useState({
     name: user?.name || '',
     phone: user?.phone || '',
@@ -179,7 +191,24 @@ export default function Profile() {
           <p className="text-xs text-gray-500 mt-0.5">Gerencie suas informações de contato e endereço para entregas rápidas.</p>
         </div>
       </div>
-      
+
+      {loyaltyEnabled && (
+        <div className="bg-amber-50 border border-amber-100 rounded-xl p-5 mb-6 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="bg-amber-400 text-amber-950 p-2.5 rounded-xl">
+              <Star size={20} className="fill-amber-950" />
+            </div>
+            <div>
+              <p className="text-[10px] font-bold text-amber-700 uppercase tracking-widest">Meus Pontos de Fidelidade</p>
+              <p className="text-xl font-black text-amber-900">{user?.points || 0} pts</p>
+            </div>
+          </div>
+          <p className="text-[10px] text-amber-700 font-bold text-right max-w-[140px] leading-tight">
+            Troque por descontos na hora de finalizar seu pedido
+          </p>
+        </div>
+      )}
+
       <form onSubmit={handleSubmit} className="space-y-6">
         {/* Informações Básicas */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 space-y-4">

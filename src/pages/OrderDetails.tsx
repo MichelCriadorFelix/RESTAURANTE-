@@ -18,7 +18,7 @@ import { Order, ChatMessage, CompanyInfo } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { formatCurrency, formatSizeLabel } from '../lib/utils';
 import { format } from 'date-fns';
-import { Send, Upload, Copy, Check, CreditCard, ChefHat, Truck, CheckCircle, XCircle, Clock, AlertCircle, Printer, ChevronLeft, Image as ImageIcon, ShoppingBag, UtensilsCrossed, Store, Smartphone } from 'lucide-react';
+import { Send, Upload, Copy, Check, CreditCard, ChefHat, Truck, CheckCircle, XCircle, Clock, AlertCircle, Printer, ChevronLeft, Image as ImageIcon, ShoppingBag, UtensilsCrossed, Store, Smartphone, Star } from 'lucide-react';
 import { playNotificationSound } from '../lib/audio';
 import { AnimatePresence, motion } from 'framer-motion';
 
@@ -929,11 +929,38 @@ export default function OrderDetails() {
                   <span className="font-black text-gray-900">{formatCurrency(order.deliveryFee)}</span>
                 </div>
               )}
+              {order.rewardApplied && (
+                <div className="flex justify-between items-center text-sm">
+                  <span className="font-bold text-emerald-600">Desconto ({order.rewardApplied.label})</span>
+                  <span className="font-black text-emerald-600">-{formatCurrency(order.rewardApplied.discountAmount)}</span>
+                </div>
+              )}
               <div className="flex justify-between items-center pt-2 border-t border-gray-100">
                 <span className="font-bold text-xs uppercase tracking-widest text-gray-500">Total</span>
                 <span className="font-black text-lg text-brand">{formatCurrency(order.total)}</span>
               </div>
             </div>
+
+            {companyInfo?.loyaltyEnabled && ((order.pointsEarned || 0) > 0 || (order.pointsRedeemed || 0) > 0) && (
+              <div className="mt-3 pt-3 border-t border-gray-100 flex flex-col gap-1.5">
+                {(order.pointsRedeemed || 0) > 0 && (
+                  <p className="text-[11px] font-bold text-gray-500 flex items-center gap-1.5">
+                    <Star size={12} className="text-amber-500 fill-amber-500 shrink-0" />
+                    Você usou {order.pointsRedeemed} pontos neste pedido{order.rewardApplied ? ` (${order.rewardApplied.label})` : ''}.
+                  </p>
+                )}
+                {(order.pointsEarned || 0) > 0 && (
+                  <p className="text-[11px] font-bold text-gray-500 flex items-center gap-1.5">
+                    <Star size={12} className="text-amber-500 fill-amber-500 shrink-0" />
+                    {order.pointsCredited
+                      ? `Você ganhou ${order.pointsEarned} pontos com este pedido!`
+                      : order.status === 'cancelled'
+                      ? `Este pedido não gerou pontos, pois foi cancelado.`
+                      : `Você ganhará ${order.pointsEarned} pontos quando o pedido for concluído.`}
+                  </p>
+                )}
+              </div>
+            )}
           </div>
 
           <div className="mb-6 grid grid-cols-1 md:grid-cols-2 gap-4">

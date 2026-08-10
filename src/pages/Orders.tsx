@@ -7,7 +7,7 @@ import { Order, Product } from '../types';
 import { formatCurrency } from '../lib/utils';
 import { format } from 'date-fns';
 import { Link, useNavigate } from 'react-router-dom';
-import { RotateCcw } from 'lucide-react';
+import { RotateCcw, Star } from 'lucide-react';
 
 const getStatusLabel = (status: Order['status'], serviceType?: string) => {
   if (status === 'delivering') {
@@ -161,6 +161,22 @@ export default function Orders() {
                 <p className="text-[10px] text-gray-500 truncate border-t border-gray-50 pt-3" translate="no">
                   {order.items.map(i => `${i.quantity}x ${i.product.name}`).join(', ')}
                 </p>
+                {((order.pointsEarned || 0) > 0 || (order.pointsRedeemed || 0) > 0) && (
+                  <div className="flex items-center gap-3 mt-2 flex-wrap">
+                    {(order.pointsEarned || 0) > 0 && (
+                      <span className="inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-wider text-amber-700">
+                        <Star size={10} className="fill-amber-500 text-amber-500" />
+                        {order.pointsCredited ? `+${order.pointsEarned} pts ganhos` : `+${order.pointsEarned} pts ao concluir`}
+                      </span>
+                    )}
+                    {(order.pointsRedeemed || 0) > 0 && (
+                      <span className="inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-wider text-gray-400">
+                        <Star size={10} className="fill-gray-300 text-gray-300" />
+                        -{order.pointsRedeemed} pts usados
+                      </span>
+                    )}
+                  </div>
+                )}
               </Link>
               <div className="border-t border-gray-50 px-5 py-3 flex justify-end">
                 <button
