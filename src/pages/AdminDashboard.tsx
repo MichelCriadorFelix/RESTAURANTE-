@@ -41,7 +41,7 @@ import {
   CheckCircle2,
   AlertCircle
 } from 'lucide-react';
-import { playNotificationSound } from '../lib/audio';
+import { playNotificationSound, startRing, stopRing } from '../lib/audio';
 import { DEFAULT_OPENING_HOURS, DAY_NAMES, DAYS_ORDER } from '../lib/openingHours';
 
 const getAdminStatusLabel = (status: Order['status'], serviceType?: string) => {
@@ -331,11 +331,11 @@ export default function AdminDashboard() {
       });
 
       if (hasNewRecentOrder) {
-        playNotificationSound('new_order');
+        // removed old sound
         if ('Notification' in window && Notification.permission === 'granted') {
           new Notification('Novo Pedido Recebido!', {
             body: 'Você recebeu um novo pedido para analisar.',
-            icon: 'https://raw.githubusercontent.com/MichelCriadorFelix/RESTAURANTE-/1975716dd80f7c608f07a4d6ebb4628f6da7d780/public/icon-192.png'
+            icon: '/icon-192.png'
           });
         }
       }

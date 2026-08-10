@@ -217,7 +217,40 @@ export default function Cart() {
       const orderRef = await addDoc(collection(db, 'orders'), orderPayload);
       
       clearCart();
-      navigate(`/orders/${orderRef.id}`);
+      
+      if (companyInfo?.phone) {
+        let paymentStr: string = paymentMethod;
+        if (paymentMethod === 'pix') paymentStr = 'PIX';
+        else if (paymentMethod === 'credit') paymentStr = 'Cartão de Crédito';
+        else if (paymentMethod === 'debit') paymentStr = 'Cartão de Débito';
+        else if (paymentMethod === 'cash') paymentStr = 'Dinheiro';
+        
+        let typeStr = serviceType === 'delivery' ? 'Delivery' : (serviceType === 'pickup' ? 'Retirada' : 'Mesa');
+
+        const orderText = `*NOVO PEDIDO!* 🛒
+*ID:* ${orderRef.id.slice(-6).toUpperCase()}
+*Nome:* ${user?.name || 'Cliente'}
+*Tipo:* ${typeStr}
+${serviceType === 'delivery' ? `*Endereço:* ${orderAddressText}\n` : ''}
+*Itens:*
+${items.map(item => `${item.quantity}x ${item.product.name}`).join('\n')}
+
+*Total:* ${formatCurrency(total)}
+*Pagamento:* ${paymentStr}
+
+*Acompanhe o pedido:*
+${window.location.origin}/orders/${orderRef.id}`;
+
+        const phone = companyInfo.phone.replace(/\D/g, '');
+        const whatsappUrl = `https://wa.me/${phone}?text=${encodeURIComponent(orderText)}`;
+        
+        navigate(`/orders/${orderRef.id}`);
+        setTimeout(() => {
+          window.location.href = whatsappUrl;
+        }, 100);
+      } else {
+        navigate(`/orders/${orderRef.id}`);
+      }
     } catch (error) {
       console.error(error);
       setAlertState({

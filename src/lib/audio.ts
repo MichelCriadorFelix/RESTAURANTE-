@@ -1,3 +1,66 @@
+let ringInterval: any = null;
+let ringAudioContext: any = null;
+
+export function startRing() {
+  if (ringInterval) return;
+  playLoudRing();
+  ringInterval = setInterval(() => {
+    playLoudRing();
+  }, 2500);
+}
+
+export function stopRing() {
+  if (ringInterval) {
+    clearInterval(ringInterval);
+    ringInterval = null;
+  }
+}
+
+function playLoudRing() {
+  try {
+    const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
+    if (!AudioContext) return;
+    
+    if (!ringAudioContext) {
+      ringAudioContext = new AudioContext();
+    }
+    const ctx = ringAudioContext;
+    if (ctx.state === 'suspended') {
+      ctx.resume();
+    }
+    const now = ctx.currentTime;
+    
+    const playRingTone = (time: number) => {
+      const osc1 = ctx.createOscillator();
+      const osc2 = ctx.createOscillator();
+      const gain = ctx.createGain();
+      
+      osc1.type = 'square';
+      osc1.frequency.setValueAtTime(440, time);
+      
+      osc2.type = 'square';
+      osc2.frequency.setValueAtTime(480, time);
+      
+      gain.gain.setValueAtTime(0, time);
+      gain.gain.linearRampToValueAtTime(0.8, time + 0.05);
+      gain.gain.setValueAtTime(0.8, time + 0.35);
+      gain.gain.linearRampToValueAtTime(0, time + 0.4);
+      
+      osc1.connect(gain);
+      osc2.connect(gain);
+      gain.connect(ctx.destination);
+      
+      osc1.start(time);
+      osc2.start(time);
+      osc1.stop(time + 0.4);
+      osc2.stop(time + 0.4);
+    };
+
+    playRingTone(now);
+    playRingTone(now + 0.5);
+  } catch(e) {}
+}
+
 /**
  * Audio notification utility using pure Web Audio API synthesizer.
  * This guarantees loud, clear, instant, and cross-platform notification chimes 
