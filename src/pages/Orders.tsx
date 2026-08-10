@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { collection, query, where, orderBy, onSnapshot, getDocs, limit } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, getDocs, limit } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { useAuth } from '../context/AuthContext';
 import { useCart } from '../context/CartContext';
@@ -43,15 +43,24 @@ export default function Orders() {
   useEffect(() => {
     if (!user) return;
 
+    // A single where() + orderBy() on a different field needs a composite
+    // Firestore index — if that index was never created in the console,
+    // the query fails silently (no error surfaced) and the screen is stuck
+    // on "Carregando pedidos..." forever. Filtering by userId only avoids
+    // the index requirement entirely; sorting happens here instead.
     const q = query(
       collection(db, 'orders'),
       where('userId', '==', user.uid),
-      orderBy('createdAt', 'desc'),
-      limit(100)
+      limit(500)
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      setOrders(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Order)));
+      const list = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Order));
+      list.sort((a, b) => b.createdAt - a.createdAt);
+      setOrders(list);
+      setLoading(false);
+    }, (err) => {
+      console.error('Erro ao carregar pedidos:', err);
       setLoading(false);
     });
 
