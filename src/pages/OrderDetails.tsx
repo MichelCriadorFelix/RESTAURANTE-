@@ -489,7 +489,7 @@ export default function OrderDetails() {
               margin: 0; 
               padding: 10px; 
               font-family: 'Courier New', Courier, monospace; 
-              font-size: ${size === '80mm' ? '14px' : '12px'};
+              font-size: ${size === '80mm' ? '17px' : '14px'};
               line-height: 1.2;
               color: #000;
               font-weight: 900;
