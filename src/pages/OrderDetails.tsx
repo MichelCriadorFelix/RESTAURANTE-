@@ -510,8 +510,7 @@ export default function OrderDetails() {
                 font-weight: 900 !important;
                 -webkit-print-color-adjust: exact !important;
                 print-color-adjust: exact !important;
-                text-shadow: 0 0 1px #000 !important;
-                -webkit-text-stroke: 0.3px #000;
+                -webkit-text-stroke: 0.15px #000;
               }
             }
           </style>

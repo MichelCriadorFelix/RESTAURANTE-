@@ -280,7 +280,8 @@ ${serviceType === 'delivery' ? `*Endereço:* ${orderAddressText}\n` : ''}
 *Itens:*
 ${items.map(item => `${item.quantity}x ${item.product.name}`).join('\n')}
 
-*Total:* ${formatCurrency(total)}
+*Subtotal:* ${formatCurrency(total)}
+${finalDeliveryFee > 0 ? `*Taxa de Entrega:* ${formatCurrency(finalDeliveryFee)}\n` : ''}${selectedReward ? `*Desconto (${selectedReward.label}):* -${formatCurrency(rewardDiscount)}\n` : ''}*Total:* ${formatCurrency(finalTotal)}
 *Pagamento:* ${paymentStr}
 
 *Acompanhe o pedido:*

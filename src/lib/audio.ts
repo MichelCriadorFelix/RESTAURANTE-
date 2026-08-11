@@ -1,18 +1,142 @@
 let ringInterval: any = null;
 let ringAudioContext: any = null;
+let ringAudioEl: HTMLAudioElement | null = null;
+let ringBlobUrlPromise: Promise<string> | null = null;
 
-export function startRing() {
-  if (ringInterval) return;
-  playLoudRing();
-  ringInterval = setInterval(() => {
-    playLoudRing();
-  }, 2500);
+function floatTo16BitPCM(view: DataView, offset: number, input: Float32Array) {
+  for (let i = 0; i < input.length; i++, offset += 2) {
+    const s = Math.max(-1, Math.min(1, input[i]));
+    view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7fff, true);
+  }
+}
+
+function writeString(view: DataView, offset: number, str: string) {
+  for (let i = 0; i < str.length; i++) {
+    view.setUint8(offset + i, str.charCodeAt(i));
+  }
+}
+
+function encodeWavMono(samples: Float32Array, sampleRate: number): Blob {
+  const buffer = new ArrayBuffer(44 + samples.length * 2);
+  const view = new DataView(buffer);
+
+  writeString(view, 0, 'RIFF');
+  view.setUint32(4, 36 + samples.length * 2, true);
+  writeString(view, 8, 'WAVE');
+  writeString(view, 12, 'fmt ');
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true); // PCM
+  view.setUint16(22, 1, true); // mono
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, sampleRate * 2, true); // byte rate
+  view.setUint16(32, 2, true); // block align
+  view.setUint16(34, 16, true); // bits per sample
+  writeString(view, 36, 'data');
+  view.setUint32(40, samples.length * 2, true);
+  floatTo16BitPCM(view, 44, samples);
+
+  return new Blob([view], { type: 'audio/wav' });
+}
+
+function scheduleRingTone(ctx: OfflineAudioContext | AudioContext, time: number) {
+  const osc1 = ctx.createOscillator();
+  const osc2 = ctx.createOscillator();
+  const gain = ctx.createGain();
+
+  osc1.type = 'square';
+  osc1.frequency.setValueAtTime(440, time);
+
+  osc2.type = 'square';
+  osc2.frequency.setValueAtTime(480, time);
+
+  gain.gain.setValueAtTime(0, time);
+  gain.gain.linearRampToValueAtTime(0.8, time + 0.05);
+  gain.gain.setValueAtTime(0.8, time + 0.35);
+  gain.gain.linearRampToValueAtTime(0, time + 0.4);
+
+  osc1.connect(gain);
+  osc2.connect(gain);
+  gain.connect(ctx.destination);
+
+  osc1.start(time);
+  osc2.start(time);
+  osc1.stop(time + 0.4);
+  osc2.stop(time + 0.4);
+}
+
+// Pre-renders the ring tone into a real WAV file (once, cached) instead of
+// synthesizing it live with the Web Audio API. Mobile browsers throttle
+// setInterval/AudioContext heavily once a tab loses focus (e.g. the admin
+// switches to WhatsApp), but they treat an actual <audio>/<video> element as
+// media playback and let it keep running in the background — the same
+// exemption that lets a background music tab keep playing.
+async function renderRingToneBlobUrl(): Promise<string> {
+  const OfflineCtx = window.OfflineAudioContext || (window as any).webkitOfflineAudioContext;
+  if (!OfflineCtx) throw new Error('OfflineAudioContext not supported');
+
+  const sampleRate = 44100;
+  const durationSeconds = 1;
+  const offlineCtx = new OfflineCtx(1, Math.ceil(sampleRate * durationSeconds), sampleRate);
+
+  scheduleRingTone(offlineCtx, 0);
+  scheduleRingTone(offlineCtx, 0.5);
+
+  const renderedBuffer = await offlineCtx.startRendering();
+  const wavBlob = encodeWavMono(renderedBuffer.getChannelData(0), sampleRate);
+  return URL.createObjectURL(wavBlob);
+}
+
+export async function startRing() {
+  if (ringAudioEl && !ringAudioEl.paused) return;
+
+  try {
+    if (!ringBlobUrlPromise) {
+      ringBlobUrlPromise = renderRingToneBlobUrl();
+    }
+    const url = await ringBlobUrlPromise;
+
+    if (!ringAudioEl) {
+      ringAudioEl = new Audio(url);
+      ringAudioEl.loop = true;
+    }
+
+    if ('mediaSession' in navigator) {
+      try {
+        (navigator as any).mediaSession.metadata = new (window as any).MediaMetadata({
+          title: 'Novo Pedido Recebido!',
+          artist: 'Toque para abrir o painel',
+        });
+        (navigator as any).mediaSession.setActionHandler('pause', () => stopRing());
+        (navigator as any).mediaSession.setActionHandler('stop', () => stopRing());
+      } catch (e) { /* mediaSession is best-effort */ }
+    }
+
+    await ringAudioEl.play();
+  } catch (e) {
+    // Autoplay blocked, or WAV rendering unsupported — fall back to the
+    // original WebAudio loop, which still works while the tab is focused.
+    if (!ringInterval) {
+      playLoudRing();
+      ringInterval = setInterval(() => {
+        playLoudRing();
+      }, 2500);
+    }
+  }
 }
 
 export function stopRing() {
+  if (ringAudioEl) {
+    ringAudioEl.pause();
+    ringAudioEl.currentTime = 0;
+  }
   if (ringInterval) {
     clearInterval(ringInterval);
     ringInterval = null;
+  }
+  if ('mediaSession' in navigator) {
+    try {
+      (navigator as any).mediaSession.playbackState = 'none';
+    } catch (e) { /* best-effort */ }
   }
 }
 
@@ -20,7 +144,7 @@ function playLoudRing() {
   try {
     const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
     if (!AudioContext) return;
-    
+
     if (!ringAudioContext) {
       ringAudioContext = new AudioContext();
     }
@@ -29,54 +153,28 @@ function playLoudRing() {
       ctx.resume();
     }
     const now = ctx.currentTime;
-    
-    const playRingTone = (time: number) => {
-      const osc1 = ctx.createOscillator();
-      const osc2 = ctx.createOscillator();
-      const gain = ctx.createGain();
-      
-      osc1.type = 'square';
-      osc1.frequency.setValueAtTime(440, time);
-      
-      osc2.type = 'square';
-      osc2.frequency.setValueAtTime(480, time);
-      
-      gain.gain.setValueAtTime(0, time);
-      gain.gain.linearRampToValueAtTime(0.8, time + 0.05);
-      gain.gain.setValueAtTime(0.8, time + 0.35);
-      gain.gain.linearRampToValueAtTime(0, time + 0.4);
-      
-      osc1.connect(gain);
-      osc2.connect(gain);
-      gain.connect(ctx.destination);
-      
-      osc1.start(time);
-      osc2.start(time);
-      osc1.stop(time + 0.4);
-      osc2.stop(time + 0.4);
-    };
 
-    playRingTone(now);
-    playRingTone(now + 0.5);
+    scheduleRingTone(ctx, now);
+    scheduleRingTone(ctx, now + 0.5);
   } catch(e) {}
 }
 
 /**
  * Audio notification utility using pure Web Audio API synthesizer.
- * This guarantees loud, clear, instant, and cross-platform notification chimes 
+ * This guarantees loud, clear, instant, and cross-platform notification chimes
  * without relying on static file hosting or assets.
  */
 export function playNotificationSound(type: 'new_order' | 'new_message' | 'status_change') {
   try {
     const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
     if (!AudioContext) return;
-    
+
     const ctx = new AudioContext();
-    
+
     if (type === 'new_order') {
       // Ascending triple-note triumphant chime for a new order
       const now = ctx.currentTime;
-      
+
       // Note 1: C5
       const osc1 = ctx.createOscillator();
       const gain1 = ctx.createGain();
@@ -116,7 +214,7 @@ export function playNotificationSound(type: 'new_order' | 'new_message' | 'statu
     } else if (type === 'new_message') {
       // Friendly, snappy bubble pop or crisp double beep for a new message
       const now = ctx.currentTime;
-      
+
       // Tap 1
       const osc1 = ctx.createOscillator();
       const gain1 = ctx.createGain();
@@ -148,17 +246,17 @@ export function playNotificationSound(type: 'new_order' | 'new_message' | 'statu
       const now = ctx.currentTime;
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
-      
+
       osc.type = 'sine';
       osc.frequency.setValueAtTime(440, now); // A4
       osc.frequency.exponentialRampToValueAtTime(880, now + 0.25); // slide to A5
-      
+
       gain.gain.setValueAtTime(0.5, now);
       gain.gain.exponentialRampToValueAtTime(0.01, now + 0.35);
-      
+
       osc.connect(gain);
       gain.connect(ctx.destination);
-      
+
       osc.start(now);
       osc.stop(now + 0.4);
     }
