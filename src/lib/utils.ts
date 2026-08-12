@@ -1,7 +1,5 @@
 import { type ClassValue, clsx } from "clsx"
 import { twMerge } from "tailwind-merge"
-import { ref, uploadBytes, getDownloadURL } from "firebase/storage"
-import { storage } from "./firebase"
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
@@ -77,11 +75,41 @@ export function compressImage(file: File, maxWidth = 800, maxHeight = 800, quali
   });
 }
 
-// Resizes an image client-side and uploads it to Firebase Storage, returning
-// a short download URL — used instead of embedding a base64 data URI
-// directly in a Firestore document, which bloats every document that
-// references it and makes every read of that collection slow (menus,
-// company settings, etc. loading in minutes instead of instantly).
+function blobToBase64(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve((reader.result as string).split(',')[1]);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+}
+
+// Uploads via our own Vercel serverless function (api/upload-image.ts),
+// which holds the Supabase service-role credential and writes to Supabase
+// Storage. Firebase Storage itself now requires the Blaze (billing-enabled)
+// plan even for near-zero usage — Google changed this in Feb 2026 — so
+// images are hosted on Supabase Storage instead, reusing the Pro Supabase
+// project this account already pays for.
+async function uploadToImageHost(blob: Blob, path: string, contentType: string): Promise<string> {
+  const base64 = await blobToBase64(blob);
+  const res = await fetch('/api/upload-image', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ path, contentType, base64 }),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || `Upload failed with status ${res.status}`);
+  }
+  const { url } = await res.json();
+  return url;
+}
+
+// Resizes an image client-side and uploads it, returning a short public
+// URL — used instead of embedding a base64 data URI directly in a
+// Firestore document, which bloats every document that references it and
+// makes every read of that collection slow (menus, company settings, etc.
+// loading in minutes instead of instantly).
 export function compressAndUploadImage(
   file: File,
   storagePath: string,
@@ -126,9 +154,7 @@ export function compressAndUploadImage(
             return;
           }
           try {
-            const storageRef = ref(storage, storagePath);
-            await uploadBytes(storageRef, blob, { contentType: 'image/jpeg' });
-            const url = await getDownloadURL(storageRef);
+            const url = await uploadToImageHost(blob, storagePath, 'image/jpeg');
             resolve(url);
           } catch (err) {
             reject(err);
@@ -142,13 +168,11 @@ export function compressAndUploadImage(
 }
 
 // Uploads an already-inlined base64 image (e.g. a legacy imageUrl saved
-// directly into a Firestore document) to Firebase Storage, returning the
-// new download URL. Used to migrate old documents the first time they're
-// loaded, without needing a separate one-off migration script.
+// directly into a Firestore document), returning the new public URL. Used
+// to migrate old documents the first time they're loaded, without needing
+// a separate one-off migration script.
 export async function migrateBase64ImageToStorage(dataUrl: string, storagePath: string): Promise<string> {
   const response = await fetch(dataUrl);
   const blob = await response.blob();
-  const storageRef = ref(storage, storagePath);
-  await uploadBytes(storageRef, blob, { contentType: blob.type || 'image/jpeg' });
-  return getDownloadURL(storageRef);
+  return uploadToImageHost(blob, storagePath, blob.type || 'image/jpeg');
 }
