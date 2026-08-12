@@ -8,6 +8,24 @@ import { getMessaging } from 'firebase-admin/messaging';
 // real OS-level notification via Firebase Cloud Messaging. This has to run
 // server-side: FIREBASE_SERVICE_ACCOUNT_KEY is a private credential that
 // grants Firestore/FCM admin access and must never reach the browser.
+function parseServiceAccount(raw: string): Record<string, unknown> {
+  const trimmed = raw.trim();
+  try {
+    return JSON.parse(trimmed);
+  } catch (jsonErr) {
+    // Pasting a multi-line JSON file into a web form is an easy way to
+    // silently mangle whitespace/quotes — fall back to base64, which can't
+    // be corrupted that way, in case the value was stored that way instead.
+    try {
+      return JSON.parse(Buffer.from(trimmed, 'base64').toString('utf-8'));
+    } catch {
+      throw new Error(
+        `FIREBASE_SERVICE_ACCOUNT_KEY is not valid JSON or base64-encoded JSON: ${(jsonErr as Error).message}`
+      );
+    }
+  }
+}
+
 function getAdminApp() {
   const existing = getApps();
   if (existing.length > 0) return existing[0];
@@ -15,7 +33,7 @@ function getAdminApp() {
   const raw = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
   if (!raw) throw new Error('FIREBASE_SERVICE_ACCOUNT_KEY is not configured');
 
-  const serviceAccount = JSON.parse(raw);
+  const serviceAccount = parseServiceAccount(raw);
   return initializeApp({ credential: cert(serviceAccount) });
 }
 
