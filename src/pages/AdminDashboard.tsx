@@ -95,6 +95,7 @@ const formatRewardLabel = (discountType: 'fixed' | 'percent', discountValue: num
 
 export default function AdminDashboard() {
   const { user } = useAuth();
+  const [notificationPermission, setNotificationPermission] = useState<NotificationPermission | 'unsupported'>('default');
   const [searchParams, setSearchParams] = useSearchParams();
   const activeTab = (searchParams.get('tab') as 'realtime' | 'history' | 'crm' | 'settings' | 'loyalty' | 'users') || 'realtime';
   const setActiveTab = (tab: 'realtime' | 'history' | 'crm' | 'settings' | 'loyalty' | 'users') => setSearchParams({ tab });
@@ -184,15 +185,17 @@ export default function AdminDashboard() {
   const [crmPeriod, setCrmPeriod] = useState<PeriodType>('month');
 
   useEffect(() => {
-    // Request notification permission, then register this device for real
-    // push notifications (works even with the app closed/backgrounded,
-    // unlike the in-app ring alarm which needs the tab open).
+    // A permission prompt triggered without a user gesture (e.g. straight
+    // from a mount effect) is routinely suppressed or shown as a barely
+    // visible icon by Chrome on Android instead of a real dialog — so this
+    // only auto-registers push if permission was already granted in a past
+    // session. Getting it granted the first time requires an actual tap,
+    // via the "Ativar Notificações" button below.
     if ('Notification' in window) {
-      Notification.requestPermission().then((permission) => {
-        if (permission === 'granted' && user?.uid) {
-          registerPushForAdmin(user.uid);
-        }
-      });
+      setNotificationPermission(Notification.permission);
+      if (Notification.permission === 'granted' && user?.uid) {
+        registerPushForAdmin(user.uid);
+      }
     }
 
     // Load Company Settings
@@ -352,6 +355,20 @@ export default function AdminDashboard() {
       stopRing();
     };
   }, []);
+
+  const handleEnableNotifications = async () => {
+    if (!('Notification' in window)) {
+      setNotificationPermission('unsupported');
+      return;
+    }
+    // Called directly from a tap — this is what makes Chrome show a real
+    // permission dialog instead of silently suppressing it.
+    const permission = await Notification.requestPermission();
+    setNotificationPermission(permission);
+    if (permission === 'granted' && user?.uid) {
+      await registerPushForAdmin(user.uid);
+    }
+  };
 
   const lookupCompanyCEP = async (cepDigits: string) => {
     if (cepDigits.length !== 8) return;
@@ -657,6 +674,20 @@ export default function AdminDashboard() {
           <p className="text-xs text-gray-500 font-semibold uppercase tracking-widest mt-0.5">Admin Central de Operações</p>
         </div>
         <div className="flex items-center space-x-3">
+          {notificationPermission !== 'granted' && notificationPermission !== 'unsupported' && (
+            <button
+              onClick={handleEnableNotifications}
+              className={`px-2.5 py-1 rounded text-[9px] font-black uppercase tracking-widest flex items-center gap-1.5 transition-colors cursor-pointer ${
+                notificationPermission === 'denied'
+                  ? 'bg-red-50 text-red-600 border border-red-200 hover:bg-red-100'
+                  : 'bg-amber-100 text-amber-700 border border-amber-200 animate-pulse hover:bg-amber-200'
+              }`}
+              title={notificationPermission === 'denied' ? 'Bloqueado — ative manualmente nas permissões do site' : 'Toque para ativar notificações de novos pedidos'}
+            >
+              <BellRing size={11} />
+              {notificationPermission === 'denied' ? 'Notificações Bloqueadas' : 'Ativar Notificações'}
+            </button>
+          )}
           <span className="px-2.5 py-1 bg-green-100 text-green-700 border border-green-200 rounded text-[9px] font-black uppercase tracking-widest animate-pulse flex items-center">
             <span className="w-1.5 h-1.5 bg-green-600 rounded-full mr-1.5 inline-block"></span>
             Conexão Live
