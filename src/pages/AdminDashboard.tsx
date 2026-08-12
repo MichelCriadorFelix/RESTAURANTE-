@@ -2,6 +2,8 @@ import React, { useEffect, useState, useRef, useMemo } from 'react';
 import { collection, query, orderBy, onSnapshot, where, doc, setDoc, limit, increment } from 'firebase/firestore';
 
 import { db, sanitizeForFirestore, handleFirestoreError, OperationType } from '../lib/firebase';
+import { useAuth } from '../context/AuthContext';
+import { registerPushForAdmin } from '../lib/push';
 import { Order, FinanceEntry, CompanyInfo } from '../types';
 import { formatCurrency, formatSizeLabel, compressAndUploadImage, migrateBase64ImageToStorage } from '../lib/utils';
 import { format, subDays } from 'date-fns';
@@ -44,7 +46,7 @@ import {
   Star,
   Plus
 } from 'lucide-react';
-import { playNotificationSound, startRing, stopRing, startBackgroundKeepAlive, stopBackgroundKeepAlive } from '../lib/audio';
+import { playNotificationSound, startRing, stopRing } from '../lib/audio';
 import { DEFAULT_OPENING_HOURS, DAY_NAMES, DAYS_ORDER } from '../lib/openingHours';
 
 const getAdminStatusLabel = (status: Order['status'], serviceType?: string) => {
@@ -92,6 +94,7 @@ const formatRewardLabel = (discountType: 'fixed' | 'percent', discountValue: num
     : `R$ ${discountValue.toFixed(2).replace('.', ',')} de desconto`;
 
 export default function AdminDashboard() {
+  const { user } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const activeTab = (searchParams.get('tab') as 'realtime' | 'history' | 'crm' | 'settings' | 'loyalty' | 'users') || 'realtime';
   const setActiveTab = (tab: 'realtime' | 'history' | 'crm' | 'settings' | 'loyalty' | 'users') => setSearchParams({ tab });
@@ -181,23 +184,16 @@ export default function AdminDashboard() {
   const [crmPeriod, setCrmPeriod] = useState<PeriodType>('month');
 
   useEffect(() => {
-    // Request notification permission
+    // Request notification permission, then register this device for real
+    // push notifications (works even with the app closed/backgrounded,
+    // unlike the in-app ring alarm which needs the tab open).
     if ('Notification' in window) {
-      Notification.requestPermission();
+      Notification.requestPermission().then((permission) => {
+        if (permission === 'granted' && user?.uid) {
+          registerPushForAdmin(user.uid);
+        }
+      });
     }
-
-    // Start a quiet, continuous background sound loop so the browser treats
-    // this tab as actively playing media — that's what keeps it (and the
-    // Firestore listeners below) running when the admin minimizes the app,
-    // instead of the OS throttling everything until the tab is reopened.
-    // Retried on visibilitychange in case the OS killed it anyway.
-    startBackgroundKeepAlive();
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
-        startBackgroundKeepAlive();
-      }
-    };
-    document.addEventListener('visibilitychange', handleVisibilityChange);
 
     // Load Company Settings
     const unsubSettings = onSnapshot(doc(db, 'settings', 'company_info'), (snapshot) => {
@@ -353,8 +349,7 @@ export default function AdminDashboard() {
       unsubFinances();
       unsubscribeOrders();
       unsubUsers();
-      stopBackgroundKeepAlive();
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      stopRing();
     };
   }, []);
 
@@ -807,18 +802,29 @@ export default function AdminDashboard() {
               </div>
             ) : (
               <div className="divide-y divide-gray-100">
-                {activeOrdersList.map(order => (
-                  <Link 
-                    key={order.id} 
-                    to={`/admin/orders/${order.id}`} 
-                    className="p-4 flex flex-col sm:flex-row sm:items-center justify-between hover:bg-gray-50 transition-colors gap-3 block"
+                {activeOrdersList.map(order => {
+                  const isNew = order.status === 'pending_payment';
+                  return (
+                  <Link
+                    key={order.id}
+                    to={`/admin/orders/${order.id}`}
+                    className={`p-4 flex flex-col sm:flex-row sm:items-center justify-between transition-colors gap-3 block ${
+                      isNew ? 'bg-amber-50 border-l-4 border-amber-400 hover:bg-amber-100/70' : 'hover:bg-gray-50'
+                    }`}
                   >
                     <div className="flex items-start gap-3">
-                      <div className="w-10 h-10 rounded bg-gray-100 flex items-center justify-center text-gray-500 border border-gray-200 flex-shrink-0">
-                        <Utensils size={18} className="text-brand" />
+                      <div className={`w-10 h-10 rounded flex items-center justify-center border flex-shrink-0 ${
+                        isNew ? 'bg-amber-400 border-amber-400 animate-pulse' : 'bg-gray-100 text-gray-500 border-gray-200'
+                      }`}>
+                        <Utensils size={18} className={isNew ? 'text-white' : 'text-brand'} />
                       </div>
                       <div>
                         <div className="flex items-center gap-2 flex-wrap">
+                          {isNew && (
+                            <span className="flex items-center gap-1 text-[9px] font-black uppercase tracking-wider text-white bg-amber-500 px-1.5 py-0.5 rounded animate-pulse">
+                              <BellRing size={10} /> Novo Pedido
+                            </span>
+                          )}
                           <p className="text-xs font-black text-gray-900 uppercase">
                             {order.userName}
                           </p>
@@ -856,7 +862,8 @@ export default function AdminDashboard() {
                       <p className="font-black text-sm text-gray-900">{formatCurrency(order.total)}</p>
                     </div>
                   </Link>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>

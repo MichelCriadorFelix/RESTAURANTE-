@@ -21,6 +21,7 @@ export interface User {
   emailVerified?: boolean;
   cookieConsentAt?: number;
   points?: number;
+  fcmTokens?: string[];
 }
 
 export interface LoyaltyReward {

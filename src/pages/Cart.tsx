@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { formatCurrency, calculateDistance, formatSizeLabel } from '../lib/utils';
 import { collection, addDoc, doc, onSnapshot } from 'firebase/firestore';
 import { db, sanitizeForFirestore } from '../lib/firebase';
+import { notifyAdminsOfNewOrder } from '../lib/push';
 import { useNavigate } from 'react-router-dom';
 import { Trash2, MapPin, Phone, User as UserIcon, Edit2, CreditCard, DollarSign, QrCode, MessageSquare, MessageCircle, AlertCircle, Check, X, Image as ImageIcon, Truck, ShoppingBag, UtensilsCrossed, Store, Gift, Star } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
@@ -260,7 +261,8 @@ export default function Cart() {
       });
 
       const orderRef = await addDoc(collection(db, 'orders'), orderPayload);
-      
+      notifyAdminsOfNewOrder(orderRef.id);
+
       clearCart();
       
       if (companyInfo?.phone) {
