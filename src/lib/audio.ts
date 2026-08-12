@@ -11,7 +11,7 @@ let ringBlobUrlPromise: Promise<string> | null = null;
 // doesn't get this exemption — the trick only works if it never stops.
 let persistentAudioEl: HTMLAudioElement | null = null;
 const KEEPALIVE_VOLUME = 0.03;
-const RING_VOLUME = 1.0;
+const RING_VOLUME = 0.85;
 
 function floatTo16BitPCM(view: DataView, offset: number, input: Float32Array) {
   for (let i = 0; i < input.length; i++, offset += 2) {
@@ -80,12 +80,17 @@ function scheduleRingTone(ctx: OfflineAudioContext | AudioContext, time: number)
 // switches to WhatsApp), but they treat an actual <audio>/<video> element as
 // media playback and let it keep running in the background — the same
 // exemption that lets a background music tab keep playing.
+//
+// The clip is 2.5s long — two beeps up front, then silence — matching the
+// original setInterval(2500ms) cadence. Looping a shorter clip (e.g. just
+// the ~1s of actual beeps) removes the gap between rings entirely, which
+// turns the ring into a near-continuous siren instead of a periodic alarm.
 async function renderRingToneBlobUrl(): Promise<string> {
   const OfflineCtx = window.OfflineAudioContext || (window as any).webkitOfflineAudioContext;
   if (!OfflineCtx) throw new Error('OfflineAudioContext not supported');
 
   const sampleRate = 44100;
-  const durationSeconds = 1;
+  const durationSeconds = 2.5;
   const offlineCtx = new OfflineCtx(1, Math.ceil(sampleRate * durationSeconds), sampleRate);
 
   scheduleRingTone(offlineCtx, 0);
