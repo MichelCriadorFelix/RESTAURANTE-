@@ -320,18 +320,22 @@ export default function AdminDashboard() {
         }
       });
 
-      if (hasNewRecentOrder) {
-        startRing();
-        if ('Notification' in window && Notification.permission === 'granted') {
-          new Notification('Novo Pedido Recebido!', {
-            body: 'Você recebeu um novo pedido para analisar.',
-            icon: 'https://raw.githubusercontent.com/MichelCriadorFelix/RESTAURANTE-/1975716dd80f7c608f07a4d6ebb4628f6da7d780/public/icon-192.png'
-          });
-        }
+      if (hasNewRecentOrder && 'Notification' in window && Notification.permission === 'granted') {
+        new Notification('Novo Pedido Recebido!', {
+          body: 'Você recebeu um novo pedido para analisar.',
+          icon: 'https://raw.githubusercontent.com/MichelCriadorFelix/RESTAURANTE-/1975716dd80f7c608f07a4d6ebb4628f6da7d780/public/icon-192.png'
+        });
       }
 
-      // Stop the ring once there are no more orders waiting on the admin
-      if (pending === 0) {
+      // Ring whenever there's at least one order still awaiting approval —
+      // not just ones created in the last 15s. Otherwise, opening the app
+      // some time after a push notification (unlock phone, tap it, wait
+      // for the page to load) means the order is no longer "recent" by the
+      // time the listener connects, and the ring never starts even though
+      // the order is still sitting there waiting.
+      if (pending > 0) {
+        startRing();
+      } else {
         stopRing();
       }
 
