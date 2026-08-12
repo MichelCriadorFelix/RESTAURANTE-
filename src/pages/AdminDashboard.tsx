@@ -44,7 +44,7 @@ import {
   Star,
   Plus
 } from 'lucide-react';
-import { playNotificationSound, startRing, stopRing } from '../lib/audio';
+import { playNotificationSound, startRing, stopRing, startBackgroundKeepAlive, stopBackgroundKeepAlive } from '../lib/audio';
 import { DEFAULT_OPENING_HOURS, DAY_NAMES, DAYS_ORDER } from '../lib/openingHours';
 
 const getAdminStatusLabel = (status: Order['status'], serviceType?: string) => {
@@ -185,6 +185,19 @@ export default function AdminDashboard() {
     if ('Notification' in window) {
       Notification.requestPermission();
     }
+
+    // Start a quiet, continuous background sound loop so the browser treats
+    // this tab as actively playing media — that's what keeps it (and the
+    // Firestore listeners below) running when the admin minimizes the app,
+    // instead of the OS throttling everything until the tab is reopened.
+    // Retried on visibilitychange in case the OS killed it anyway.
+    startBackgroundKeepAlive();
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        startBackgroundKeepAlive();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
 
     // Load Company Settings
     const unsubSettings = onSnapshot(doc(db, 'settings', 'company_info'), (snapshot) => {
@@ -340,7 +353,8 @@ export default function AdminDashboard() {
       unsubFinances();
       unsubscribeOrders();
       unsubUsers();
-      stopRing();
+      stopBackgroundKeepAlive();
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, []);
 
