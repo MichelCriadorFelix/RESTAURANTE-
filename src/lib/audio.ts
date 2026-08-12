@@ -10,7 +10,7 @@ let ringBlobUrlPromise: Promise<string> | null = null;
 // connection) once the app is minimized. Pausing and restarting on demand
 // doesn't get this exemption — the trick only works if it never stops.
 let persistentAudioEl: HTMLAudioElement | null = null;
-const KEEPALIVE_VOLUME = 0.03;
+const KEEPALIVE_VOLUME = 0.01;
 const RING_VOLUME = 0.85;
 
 function floatTo16BitPCM(view: DataView, offset: number, input: Float32Array) {
