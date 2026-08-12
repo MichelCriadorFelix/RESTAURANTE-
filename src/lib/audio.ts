@@ -1,17 +1,24 @@
 let ringInterval: any = null;
 let ringAudioContext: any = null;
 let ringBlobUrlPromise: Promise<string> | null = null;
+let ambientBlobUrlPromise: Promise<string> | null = null;
 
 // A single <audio> element, kept playing continuously (never paused) once
-// the admin dashboard is open — only its volume changes between "quiet
-// ambient loop" and "loud ring". Browsers exempt a tab that's *already*
-// actively playing media from the background throttling that otherwise
-// pauses timers/network listeners (including the Firestore onSnapshot
-// connection) once the app is minimized. Pausing and restarting on demand
-// doesn't get this exemption — the trick only works if it never stops.
+// the admin dashboard is open — it just swaps between two pre-rendered
+// clips: a near-silent "ambient" one and the actual loud ring. Browsers
+// exempt a tab that's *already* actively playing media from the background
+// throttling that otherwise pauses timers/network listeners (including the
+// Firestore onSnapshot connection) once the app is minimized. Pausing and
+// restarting on demand doesn't get this exemption — the trick only works if
+// it never stops.
+//
+// Quiet vs. loud is controlled by the gain baked directly into each clip's
+// samples, not by HTMLMediaElement.volume — some Android browsers don't
+// reliably scale down that property, which made the "quiet" loop end up
+// exactly as loud as the real ring.
 let persistentAudioEl: HTMLAudioElement | null = null;
-const KEEPALIVE_VOLUME = 0.01;
-const RING_VOLUME = 0.85;
+const AMBIENT_PEAK_GAIN = 0.01;
+const RING_PEAK_GAIN = 0.8;
 
 function floatTo16BitPCM(view: DataView, offset: number, input: Float32Array) {
   for (let i = 0; i < input.length; i++, offset += 2) {
@@ -48,7 +55,7 @@ function encodeWavMono(samples: Float32Array, sampleRate: number): Blob {
   return new Blob([view], { type: 'audio/wav' });
 }
 
-function scheduleRingTone(ctx: OfflineAudioContext | AudioContext, time: number) {
+function scheduleRingTone(ctx: OfflineAudioContext | AudioContext, time: number, peakGain: number) {
   const osc1 = ctx.createOscillator();
   const osc2 = ctx.createOscillator();
   const gain = ctx.createGain();
@@ -60,8 +67,8 @@ function scheduleRingTone(ctx: OfflineAudioContext | AudioContext, time: number)
   osc2.frequency.setValueAtTime(480, time);
 
   gain.gain.setValueAtTime(0, time);
-  gain.gain.linearRampToValueAtTime(0.8, time + 0.05);
-  gain.gain.setValueAtTime(0.8, time + 0.35);
+  gain.gain.linearRampToValueAtTime(peakGain, time + 0.05);
+  gain.gain.setValueAtTime(peakGain, time + 0.35);
   gain.gain.linearRampToValueAtTime(0, time + 0.4);
 
   osc1.connect(gain);
@@ -74,18 +81,18 @@ function scheduleRingTone(ctx: OfflineAudioContext | AudioContext, time: number)
   osc2.stop(time + 0.4);
 }
 
-// Pre-renders the ring tone into a real WAV file (once, cached) instead of
-// synthesizing it live with the Web Audio API. Mobile browsers throttle
-// setInterval/AudioContext heavily once a tab loses focus (e.g. the admin
-// switches to WhatsApp), but they treat an actual <audio>/<video> element as
-// media playback and let it keep running in the background — the same
-// exemption that lets a background music tab keep playing.
+// Pre-renders a tone into a real WAV file instead of synthesizing it live
+// with the Web Audio API. Mobile browsers throttle setInterval/AudioContext
+// heavily once a tab loses focus (e.g. the admin switches to WhatsApp), but
+// they treat an actual <audio>/<video> element as media playback and let it
+// keep running in the background — the same exemption that lets a
+// background music tab keep playing.
 //
 // The clip is 2.5s long — two beeps up front, then silence — matching the
 // original setInterval(2500ms) cadence. Looping a shorter clip (e.g. just
 // the ~1s of actual beeps) removes the gap between rings entirely, which
 // turns the ring into a near-continuous siren instead of a periodic alarm.
-async function renderRingToneBlobUrl(): Promise<string> {
+async function renderToneBlobUrl(peakGain: number): Promise<string> {
   const OfflineCtx = window.OfflineAudioContext || (window as any).webkitOfflineAudioContext;
   if (!OfflineCtx) throw new Error('OfflineAudioContext not supported');
 
@@ -93,23 +100,22 @@ async function renderRingToneBlobUrl(): Promise<string> {
   const durationSeconds = 2.5;
   const offlineCtx = new OfflineCtx(1, Math.ceil(sampleRate * durationSeconds), sampleRate);
 
-  scheduleRingTone(offlineCtx, 0);
-  scheduleRingTone(offlineCtx, 0.5);
+  scheduleRingTone(offlineCtx, 0, peakGain);
+  scheduleRingTone(offlineCtx, 0.5, peakGain);
 
   const renderedBuffer = await offlineCtx.startRendering();
   const wavBlob = encodeWavMono(renderedBuffer.getChannelData(0), sampleRate);
   return URL.createObjectURL(wavBlob);
 }
 
-async function ensurePersistentAudio(): Promise<HTMLAudioElement> {
-  if (!ringBlobUrlPromise) {
-    ringBlobUrlPromise = renderRingToneBlobUrl();
-  }
-  const url = await ringBlobUrlPromise;
-
+async function ensurePersistentAudioWithSrc(url: string): Promise<HTMLAudioElement> {
   if (!persistentAudioEl) {
-    persistentAudioEl = new Audio(url);
+    persistentAudioEl = new Audio();
     persistentAudioEl.loop = true;
+    persistentAudioEl.volume = 1;
+  }
+  if (persistentAudioEl.src !== url) {
+    persistentAudioEl.src = url;
   }
   return persistentAudioEl;
 }
@@ -134,8 +140,11 @@ function setMediaSessionMetadata(ringing: boolean) {
 // same exemption keeping the Firestore listener alive.
 export async function startBackgroundKeepAlive() {
   try {
-    const audio = await ensurePersistentAudio();
-    audio.volume = KEEPALIVE_VOLUME;
+    if (!ambientBlobUrlPromise) {
+      ambientBlobUrlPromise = renderToneBlobUrl(AMBIENT_PEAK_GAIN);
+    }
+    const url = await ambientBlobUrlPromise;
+    const audio = await ensurePersistentAudioWithSrc(url);
     setMediaSessionMetadata(false);
     if (audio.paused) {
       await audio.play();
@@ -149,8 +158,11 @@ export async function startBackgroundKeepAlive() {
 
 export async function startRing() {
   try {
-    const audio = await ensurePersistentAudio();
-    audio.volume = RING_VOLUME;
+    if (!ringBlobUrlPromise) {
+      ringBlobUrlPromise = renderToneBlobUrl(RING_PEAK_GAIN);
+    }
+    const url = await ringBlobUrlPromise;
+    const audio = await ensurePersistentAudioWithSrc(url);
     setMediaSessionMetadata(true);
     if (audio.paused) {
       await audio.play();
@@ -168,11 +180,20 @@ export async function startRing() {
 }
 
 export function stopRing() {
-  if (persistentAudioEl && !persistentAudioEl.paused) {
-    // Drop back to the quiet ambient loop instead of pausing — pausing
+  if (persistentAudioEl && ambientBlobUrlPromise) {
+    // Drop back to the quiet ambient clip instead of pausing — pausing
     // would give up the background-media exemption the keep-alive exists
     // for, right until the next order needs it again.
-    persistentAudioEl.volume = KEEPALIVE_VOLUME;
+    ambientBlobUrlPromise.then((url) => {
+      if (!persistentAudioEl) return;
+      const wasPlaying = !persistentAudioEl.paused;
+      if (persistentAudioEl.src !== url) {
+        persistentAudioEl.src = url;
+      }
+      if (wasPlaying) {
+        persistentAudioEl.play().catch(() => {});
+      }
+    });
     setMediaSessionMetadata(false);
   }
   if (ringInterval) {
@@ -210,8 +231,8 @@ function playLoudRing() {
     }
     const now = ctx.currentTime;
 
-    scheduleRingTone(ctx, now);
-    scheduleRingTone(ctx, now + 0.5);
+    scheduleRingTone(ctx, now, RING_PEAK_GAIN);
+    scheduleRingTone(ctx, now + 0.5, RING_PEAK_GAIN);
   } catch(e) {}
 }
 
