@@ -489,7 +489,7 @@ export default function OrderDetails() {
               margin: 0; 
               padding: 10px; 
               font-family: 'Courier New', Courier, monospace; 
-              font-size: ${size === '80mm' ? '17px' : '14px'};
+              font-size: ${size === '80mm' ? '19px' : '16px'};
               line-height: 1.2;
               color: #000;
               font-weight: 900;
@@ -523,12 +523,12 @@ export default function OrderDetails() {
           </div>
 
           ${!isKitchen ? `
-          <div class="section">
+          <div class="section" style="text-align: center;">
             <div class="label">Cliente:</div>
             <div>${escapeHtml(order.userName)}</div>
           </div>
 
-          <div class="section">
+          <div class="section" style="text-align: center;">
             <div class="label">Endereço de Entrega:</div>
             <div>${escapeHtml(order.address || 'Não informado')}</div>
           </div>
@@ -542,10 +542,15 @@ export default function OrderDetails() {
             <div class="label" style="margin-bottom: 5px;">Itens do Pedido:</div>
             ${order.items.map(item => `
               <div class="item">
-                <span class="notranslate" translate="no">${item.quantity}x ${escapeHtml(item.product.name)}</span>
+                <span class="notranslate" translate="no">${item.quantity} Und(s) ${escapeHtml(item.product.name)}</span>
                 ${!isKitchen ? `<span>${formatCurrency(item.totalPrice)}</span>` : ''}
               </div>
-              ${item.customizationSelections ? Object.entries(item.customizationSelections).map(([step, options]) => options.length > 0 ? `<div class="item-details">- ${escapeHtml(step)}: ${options.map(o => escapeHtml(o.name)).join(', ')}</div>` : '').join('') : ''}
+              ${item.customizationSelections ? Object.values(item.customizationSelections).flat().map(o => `
+                <div class="item-details" style="display: flex; justify-content: space-between;">
+                  <span>+1 ${escapeHtml(o.name)}</span>
+                  ${!isKitchen && o.price ? `<span>${formatCurrency(o.price)}</span>` : ''}
+                </div>
+              `).join('') : ''}
               ${item.notes ? `<div class="item-details">- Obs: ${escapeHtml(item.notes)}</div>` : ''}
               ${!item.customizationSelections && item.selectedOption && item.selectedOption !== 'Nenhum' ? `<div class="item-details">- Opção: ${escapeHtml(item.selectedOption)}</div>` : ''}
               ${!item.customizationSelections && item.selectedSize ? `<div class="item-details">- Opção: ${escapeHtml(formatSizeLabel(item.selectedSize))}</div>` : ''}
