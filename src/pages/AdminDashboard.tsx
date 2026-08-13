@@ -498,8 +498,8 @@ export default function AdminDashboard() {
       if (!storeLat || !storeLng) {
         try {
           const zipToSearch = companyInfo.addressZip || '25570-162';
-          const queryStr = `${companyInfo.addressStreet || ''} ${companyInfo.addressNumber || ''}, ${companyInfo.addressNeighborhood || ''}, ${companyInfo.addressCity || ''}, ${zipToSearch}, Brasil`;
-          const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(queryStr)}`, {
+          const queryStr = `${companyInfo.addressStreet || ''} ${companyInfo.addressNumber || ''}, ${companyInfo.addressNeighborhood || ''}, ${companyInfo.addressCity || ''} - ${companyInfo.addressState || ''}, ${zipToSearch}, Brasil`;
+          const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&countrycodes=br&q=${encodeURIComponent(queryStr)}`, {
             headers: { 'User-Agent': 'Restaurante-App' }
           });
           const geodata = await res.json();

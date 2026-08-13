@@ -60,10 +60,25 @@ export default function Cart() {
   const { calculatedDeliveryFee, isNeighborhoodExplicitlyAllowed } = React.useMemo(() => {
     if (serviceType !== 'delivery') return { calculatedDeliveryFee: 0, isNeighborhoodExplicitlyAllowed: false };
     if (companyInfo?.neighborhoodFees && user?.addressNeighborhood) {
-      const userNeighborhood = user.addressNeighborhood.trim();
-      const match = companyInfo.neighborhoodFees.find(nh => 
-        nh.name.trim().localeCompare(userNeighborhood, 'pt-BR', { sensitivity: 'base' }) === 0
-      );
+      // Case/accent-insensitive, and tolerant of extra whitespace or minor
+      // wording differences either side (e.g. customer's "Vila Sao Joao,
+      // perto do posto" vs the admin's registered "Vila São João") — an
+      // exact-only match was silently falling back to the base delivery
+      // fee for any real-world typo/variation instead of the bairro rate.
+      const normalize = (s: string) => s
+        .trim()
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[̀-ͯ]/g, '')
+        .replace(/\s+/g, ' ');
+      const normalizedUser = normalize(user.addressNeighborhood);
+      const match = companyInfo.neighborhoodFees.find(nh => {
+        const normalizedName = normalize(nh.name);
+        if (!normalizedName) return false;
+        return normalizedUser === normalizedName
+          || normalizedUser.includes(normalizedName)
+          || normalizedName.includes(normalizedUser);
+      });
       if (match) {
         return { calculatedDeliveryFee: match.fee, isNeighborhoodExplicitlyAllowed: true };
       }
