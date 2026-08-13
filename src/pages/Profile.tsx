@@ -141,8 +141,12 @@ export default function Profile() {
     
     if (formData.addressStreet && formData.addressCity && formData.addressZip) {
       try {
-        const query = `${formData.addressStreet} ${formData.addressNumber || ''}, ${formData.addressNeighborhood}, ${formData.addressCity}, ${formData.addressZip}, Brasil`;
-        const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}`, {
+        // Include the state (matching how the restaurant's own address is
+        // geocoded) — without it, the free geocoder can match a same-named
+        // street/neighborhood in a completely different city, producing
+        // wildly wrong coordinates and a false "fora da área de entrega".
+        const query = `${formData.addressStreet} ${formData.addressNumber || ''}, ${formData.addressNeighborhood}, ${formData.addressCity} - ${formData.addressState || ''}, ${formData.addressZip}, Brasil`;
+        const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&countrycodes=br&q=${encodeURIComponent(query)}`, {
           headers: {
             'User-Agent': 'Restaurante-App'
           }

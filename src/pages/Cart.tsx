@@ -14,7 +14,7 @@ import { isStoreOpen } from '../lib/openingHours';
 
 export default function Cart() {
   const { items, removeItem, total, clearCart } = useCart();
-  const { user } = useAuth();
+  const { user, updateUser } = useAuth();
   const [address, setAddress] = useState(user?.address || '');
   const [serviceType, setServiceType] = useState<ServiceType>('delivery');
   const [tableNumber, setTableNumber] = useState('');
@@ -168,30 +168,69 @@ export default function Cart() {
         }
       }
 
+      // Missing the state in the query lets the free geocoder match a
+      // same-named street/neighborhood in a completely different city —
+      // this is what produced a customer's reported "1081km away" false
+      // positive despite living a few km from the restaurant. Including
+      // the state (like the restaurant's own address geocode already
+      // does) and restricting to Brazil makes that mismatch far less
+      // likely going forward.
+      const geocodeUserAddress = async (): Promise<{ lat: number; lng: number } | null> => {
+        if (!user.addressStreet || !user.addressCity || !user.addressZip) return null;
+        try {
+          const query = `${user.addressStreet} ${user.addressNumber || ''}, ${user.addressNeighborhood || ''}, ${user.addressCity} - ${user.addressState || ''}, ${user.addressZip}, Brasil`;
+          const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&countrycodes=br&q=${encodeURIComponent(query)}`, {
+            headers: { 'User-Agent': 'Restaurante-App' }
+          });
+          const geodata = await res.json();
+          if (geodata && geodata.length > 0) {
+            return { lat: parseFloat(geodata[0].lat), lng: parseFloat(geodata[0].lon) };
+          }
+        } catch (e) {
+          console.error("Geocoding on checkout failed", e);
+        }
+        return null;
+      };
+
       let userLat = user.lat;
       let userLng = user.lng;
+      const hadStoredCoords = !!(userLat && userLng);
 
       if (!userLat || !userLng) {
-        if (user.addressStreet && user.addressCity && user.addressZip) {
-          try {
-            const query = `${user.addressStreet} ${user.addressNumber || ''}, ${user.addressNeighborhood}, ${user.addressCity}, ${user.addressZip}, Brasil`;
-            const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}`, {
-              headers: { 'User-Agent': 'Restaurante-App' }
-            });
-            const geodata = await res.json();
-            if (geodata && geodata.length > 0) {
-              userLat = parseFloat(geodata[0].lat);
-              userLng = parseFloat(geodata[0].lon);
-            }
-          } catch (e) {
-            console.error("Geocoding on checkout failed", e);
-          }
+        const geo = await geocodeUserAddress();
+        if (geo) {
+          userLat = geo.lat;
+          userLng = geo.lng;
         }
       }
 
       if (userLat && userLng) {
-        const distance = calculateDistance(restaurantLat, restaurantLng, userLat, userLng);
-        if (distance > companyInfo.deliveryRadiusKm * 1000) {
+        let distance = calculateDistance(restaurantLat, restaurantLng, userLat, userLng);
+
+        // A delivery radius is realistically never more than a few dozen
+        // km, so a distance in the hundreds of km is a geocoding mismatch,
+        // not a genuinely out-of-range customer. Re-check with a fresh
+        // geocode (the stored coordinates may predate the state-qualified
+        // query above) before deciding, and never block a real local
+        // customer on an implausible result either way.
+        const SANITY_LIMIT_METERS = 200000; // 200km
+        if (distance > SANITY_LIMIT_METERS && hadStoredCoords) {
+          const fresh = await geocodeUserAddress();
+          if (fresh) {
+            userLat = fresh.lat;
+            userLng = fresh.lng;
+            distance = calculateDistance(restaurantLat, restaurantLng, userLat, userLng);
+            if (distance <= SANITY_LIMIT_METERS) {
+              // Corrected coordinates look sane now — persist them so future
+              // checkouts don't need to re-geocode at all.
+              updateUser({ lat: userLat, lng: userLng }).catch(() => {});
+            }
+          }
+        }
+
+        if (distance > SANITY_LIMIT_METERS) {
+          console.warn(`Verificação de raio de entrega ignorada: distância calculada de ${(distance / 1000).toFixed(1)}km para o cliente ${user.uid} é implausível (provável erro do serviço de geolocalização gratuito), não um endereço realmente fora da área.`);
+        } else if (distance > companyInfo.deliveryRadiusKm * 1000) {
           setAlertState({
             type: 'error',
             message: 'Fora da área de entrega',

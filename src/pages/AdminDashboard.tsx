@@ -5,7 +5,7 @@ import { db, sanitizeForFirestore, handleFirestoreError, OperationType } from '.
 import { useAuth } from '../context/AuthContext';
 import { registerPushForAdmin } from '../lib/push';
 import { Order, FinanceEntry, CompanyInfo } from '../types';
-import { formatCurrency, formatSizeLabel, compressAndUploadImage, migrateBase64ImageToStorage } from '../lib/utils';
+import { formatCurrency, formatSizeLabel, compressAndUploadImage, migrateBase64ImageToStorage, calculateDistance } from '../lib/utils';
 import { format, subDays } from 'date-fns';
 import { Link, useSearchParams } from 'react-router-dom';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
@@ -44,7 +44,8 @@ import {
   AlertCircle,
   Gift,
   Star,
-  Plus
+  Plus,
+  X
 } from 'lucide-react';
 import { playNotificationSound, startRing, stopRing } from '../lib/audio';
 import { DEFAULT_OPENING_HOURS, DAY_NAMES, DAYS_ORDER } from '../lib/openingHours';
@@ -96,6 +97,7 @@ const formatRewardLabel = (discountType: 'fixed' | 'percent', discountValue: num
 export default function AdminDashboard() {
   const { user } = useAuth();
   const [notificationPermission, setNotificationPermission] = useState<NotificationPermission | 'unsupported'>('default');
+  const [viewingUser, setViewingUser] = useState<any | null>(null);
   const [searchParams, setSearchParams] = useSearchParams();
   const activeTab = (searchParams.get('tab') as 'realtime' | 'history' | 'crm' | 'settings' | 'loyalty' | 'users') || 'realtime';
   const setActiveTab = (tab: 'realtime' | 'history' | 'crm' | 'settings' | 'loyalty' | 'users') => setSearchParams({ tab });
@@ -1338,26 +1340,35 @@ export default function AdminDashboard() {
                         {u.createdAt ? format(new Date(u.createdAt), 'dd/MM/yyyy') : 'N/A'}
                       </td>
                       <td className="p-4 text-center">
-                        <button
-                          onClick={async () => {
-                            const newRole = u.role === 'admin' ? 'user' : 'admin';
-                            if (window.confirm(`Deseja alterar o cargo de ${u.name} para ${newRole}?`)) {
-                              try {
-                                await setDoc(doc(db, 'users', u.id), { role: newRole }, { merge: true });
-                              } catch (err) {
-                                handleFirestoreError(err, OperationType.UPDATE, `users/${u.id}`);
+                        <div className="flex items-center justify-center gap-2">
+                          <button
+                            onClick={() => setViewingUser(u)}
+                            className="inline-flex items-center gap-1 px-3 py-1.5 rounded text-[10px] font-black uppercase tracking-wider transition-colors bg-gray-100 text-gray-600 hover:bg-gray-200"
+                            title="Ver dados de cadastro (telefone, endereço, localização)"
+                          >
+                            <Eye size={12} /> Ver Dados
+                          </button>
+                          <button
+                            onClick={async () => {
+                              const newRole = u.role === 'admin' ? 'user' : 'admin';
+                              if (window.confirm(`Deseja alterar o cargo de ${u.name} para ${newRole}?`)) {
+                                try {
+                                  await setDoc(doc(db, 'users', u.id), { role: newRole }, { merge: true });
+                                } catch (err) {
+                                  handleFirestoreError(err, OperationType.UPDATE, `users/${u.id}`);
+                                }
                               }
-                            }
-                          }}
-                          className={`inline-flex items-center gap-1 px-3 py-1.5 rounded text-[10px] font-black uppercase tracking-wider transition-colors ${
-                            u.role === 'admin'
-                              ? 'bg-red-50 text-red-600 hover:bg-red-100'
-                              : 'bg-brand text-white hover:bg-brand-dark'
-                          }`}
-                        >
-                          {u.role === 'admin' ? <TrendingDown size={12} /> : <TrendingUp size={12} />}
-                          {u.role === 'admin' ? 'Remover Admin' : 'Tornar Admin'}
-                        </button>
+                            }}
+                            className={`inline-flex items-center gap-1 px-3 py-1.5 rounded text-[10px] font-black uppercase tracking-wider transition-colors ${
+                              u.role === 'admin'
+                                ? 'bg-red-50 text-red-600 hover:bg-red-100'
+                                : 'bg-brand text-white hover:bg-brand-dark'
+                            }`}
+                          >
+                            {u.role === 'admin' ? <TrendingDown size={12} /> : <TrendingUp size={12} />}
+                            {u.role === 'admin' ? 'Remover Admin' : 'Tornar Admin'}
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -1378,6 +1389,98 @@ export default function AdminDashboard() {
           </div>
         </div>
       )}
+
+      {/* Client registration data modal — lets the admin see phone/address/
+          geolocation directly, e.g. to diagnose a wrong "fora da área de
+          entrega" report instead of guessing blind. */}
+      {viewingUser && (() => {
+        const u = viewingUser;
+        const addressLines = [
+          u.addressStreet && `${u.addressStreet}${u.addressNumber ? `, Nº ${u.addressNumber}` : ''}`,
+          u.addressComplement,
+          u.addressNeighborhood,
+          u.addressCity && `${u.addressCity}${u.addressState ? `/${u.addressState.toUpperCase()}` : ''}`,
+          u.addressZip && `CEP: ${u.addressZip}`,
+          u.addressReference && `Ref: ${u.addressReference}`,
+        ].filter(Boolean);
+
+        const distanceFromStoreKm = (u.lat && u.lng && companyInfo.lat && companyInfo.lng)
+          ? calculateDistance(companyInfo.lat, companyInfo.lng, u.lat, u.lng) / 1000
+          : null;
+        const geocodeLooksWrong = distanceFromStoreKm !== null && distanceFromStoreKm > 200;
+
+        return (
+          <div className="fixed inset-0 z-[80] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setViewingUser(null)}>
+            <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+              <div className="p-5 border-b border-gray-100 flex items-center justify-between sticky top-0 bg-white">
+                <div>
+                  <h3 className="text-sm font-black text-gray-900 uppercase tracking-wider">{u.name}</h3>
+                  <p className="text-[10px] text-gray-400 font-bold">{u.email}</p>
+                </div>
+                <button onClick={() => setViewingUser(null)} className="p-1.5 text-gray-400 hover:bg-gray-100 rounded-full">
+                  <X size={16} />
+                </button>
+              </div>
+
+              <div className="p-5 space-y-4">
+                <div>
+                  <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Telefone / WhatsApp</p>
+                  <p className="text-xs font-bold text-gray-800">{u.phone || 'Não informado'}</p>
+                </div>
+
+                <div>
+                  <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Endereço cadastrado</p>
+                  {addressLines.length > 0 ? (
+                    <p className="text-xs font-bold text-gray-800 leading-relaxed">{addressLines.join(' — ')}</p>
+                  ) : (
+                    <p className="text-xs text-gray-400 font-bold">Não informado</p>
+                  )}
+                </div>
+
+                <div>
+                  <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Localização (usada para calcular o raio de entrega)</p>
+                  {u.lat && u.lng ? (
+                    <div className="flex items-center gap-2">
+                      <p className="text-xs font-bold text-gray-800">{u.lat.toFixed(5)}, {u.lng.toFixed(5)}</p>
+                      <a
+                        href={`https://www.google.com/maps?q=${u.lat},${u.lng}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-[10px] font-black text-brand hover:underline uppercase tracking-wider"
+                      >
+                        Ver no mapa
+                      </a>
+                    </div>
+                  ) : (
+                    <p className="text-xs text-gray-400 font-bold">Ainda não calculada (o cliente nunca finalizou um pedido de delivery, ou o endereço não tem CEP/rua completos)</p>
+                  )}
+                </div>
+
+                {distanceFromStoreKm !== null && (
+                  <div className={`rounded-lg p-3 border ${geocodeLooksWrong ? 'bg-red-50 border-red-200' : 'bg-emerald-50 border-emerald-200'}`}>
+                    <p className={`text-[10px] font-black uppercase tracking-widest mb-1 ${geocodeLooksWrong ? 'text-red-700' : 'text-emerald-700'}`}>
+                      {geocodeLooksWrong ? '⚠️ Localização provavelmente errada' : 'Distância até o estabelecimento'}
+                    </p>
+                    <p className={`text-xs font-bold ${geocodeLooksWrong ? 'text-red-800' : 'text-emerald-800'}`}>
+                      {distanceFromStoreKm.toFixed(1)} km
+                    </p>
+                    {geocodeLooksWrong && (
+                      <p className="text-[10px] text-red-700 font-semibold mt-1.5 leading-relaxed">
+                        Uma distância tão grande normalmente significa que o serviço gratuito de mapas (Nominatim) confundiu o endereço com um lugar de nome parecido em outra cidade — não que o cliente está mesmo fora da área. Peça pro cliente abrir <strong>Meus Dados</strong> e salvar o endereço de novo (o app já foi corrigido pra incluir o estado na busca, o que deve resolver); ou toque em "Ver no mapa" acima pra conferir visualmente.
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                <div className="pt-3 border-t border-gray-100 flex items-center justify-between text-[10px] text-gray-400 font-bold uppercase tracking-wider">
+                  <span>Pontos de fidelidade: {u.points || 0}</span>
+                  <span>Cadastro: {u.createdAt ? format(new Date(u.createdAt), 'dd/MM/yyyy') : 'N/A'}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* TAB 4: COMPANY DETAILS / CONFIGURATIONS */}
       {activeTab === 'settings' && (
