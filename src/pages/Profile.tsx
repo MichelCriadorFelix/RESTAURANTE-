@@ -3,6 +3,7 @@ import { useAuth } from '../context/AuthContext';
 import { Save, MapPin, Phone, User as UserIcon, Search, Star } from 'lucide-react';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { db } from '../lib/firebase';
+import { geocodeBrazilianAddress } from '../lib/utils';
 
 export default function Profile() {
   const { user, updateUser } = useAuth();
@@ -135,40 +136,26 @@ export default function Profile() {
     
     const combinedAddress = parts.join(' - ');
     
-    // Try to geocode the address
+    // Try to geocode the address. Backs off through progressively broader
+    // (but still real) queries when the exact street isn't in the free
+    // geocoder's database — it never falls back to a bare CEP search,
+    // which used to misparse the tail of the postal code as an unrelated
+    // place elsewhere in Brazil and produce wildly wrong coordinates.
     let lat: number | undefined;
     let lng: number | undefined;
-    
+
     if (formData.addressStreet && formData.addressCity && formData.addressZip) {
-      try {
-        // Include the state (matching how the restaurant's own address is
-        // geocoded) — without it, the free geocoder can match a same-named
-        // street/neighborhood in a completely different city, producing
-        // wildly wrong coordinates and a false "fora da área de entrega".
-        const query = `${formData.addressStreet} ${formData.addressNumber || ''}, ${formData.addressNeighborhood}, ${formData.addressCity} - ${formData.addressState || ''}, ${formData.addressZip}, Brasil`;
-        const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&countrycodes=br&q=${encodeURIComponent(query)}`, {
-          headers: {
-            'User-Agent': 'Restaurante-App'
-          }
-        });
-        const geodata = await res.json();
-        if (geodata && geodata.length > 0) {
-          lat = parseFloat(geodata[0].lat);
-          lng = parseFloat(geodata[0].lon);
-        } else {
-          // Fallback to cep search if full address fails
-          const cepQuery = `${formData.addressZip}, Brasil`;
-          const fallbackRes = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(cepQuery)}`, {
-            headers: { 'User-Agent': 'Restaurante-App' }
-          });
-          const fallbackData = await fallbackRes.json();
-          if (fallbackData && fallbackData.length > 0) {
-            lat = parseFloat(fallbackData[0].lat);
-            lng = parseFloat(fallbackData[0].lon);
-          }
-        }
-      } catch (e) {
-        console.error("Geocoding failed", e);
+      const geo = await geocodeBrazilianAddress({
+        street: formData.addressStreet,
+        number: formData.addressNumber,
+        neighborhood: formData.addressNeighborhood,
+        city: formData.addressCity,
+        state: formData.addressState,
+        zip: formData.addressZip,
+      });
+      if (geo) {
+        lat = geo.lat;
+        lng = geo.lng;
       }
     }
 

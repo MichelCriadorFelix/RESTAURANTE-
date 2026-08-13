@@ -5,7 +5,7 @@ import { db, sanitizeForFirestore, handleFirestoreError, OperationType } from '.
 import { useAuth } from '../context/AuthContext';
 import { registerPushForAdmin } from '../lib/push';
 import { Order, FinanceEntry, CompanyInfo } from '../types';
-import { formatCurrency, formatSizeLabel, compressAndUploadImage, migrateBase64ImageToStorage, calculateDistance } from '../lib/utils';
+import { formatCurrency, formatSizeLabel, compressAndUploadImage, migrateBase64ImageToStorage, calculateDistance, geocodeBrazilianAddress } from '../lib/utils';
 import { format, subDays } from 'date-fns';
 import { Link, useSearchParams } from 'react-router-dom';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
@@ -98,6 +98,51 @@ export default function AdminDashboard() {
   const { user } = useAuth();
   const [notificationPermission, setNotificationPermission] = useState<NotificationPermission | 'unsupported'>('default');
   const [viewingUser, setViewingUser] = useState<any | null>(null);
+  const [fixingLocation, setFixingLocation] = useState(false);
+  const [fixLocationMessage, setFixLocationMessage] = useState<string | null>(null);
+
+  const handleFixUserLocation = async (u: any) => {
+    if (!u.addressStreet || !u.addressCity || !u.addressZip) {
+      setFixLocationMessage('Esse cliente não tem rua/cidade/CEP completos no cadastro — peça pra ele preencher em "Meus Dados" primeiro.');
+      return;
+    }
+    setFixingLocation(true);
+    setFixLocationMessage(null);
+    try {
+      const geo = await geocodeBrazilianAddress({
+        street: u.addressStreet,
+        number: u.addressNumber,
+        neighborhood: u.addressNeighborhood,
+        city: u.addressCity,
+        state: u.addressState,
+        zip: u.addressZip,
+      });
+      if (!geo) {
+        setFixLocationMessage('Não consegui localizar esse endereço no mapa, nem pela cidade. Confira se rua, bairro e cidade estão certos no cadastro dele.');
+        return;
+      }
+      const newLat = geo.lat;
+      const newLng = geo.lng;
+
+      if (companyInfo.lat && companyInfo.lng) {
+        const newDistanceKm = calculateDistance(companyInfo.lat, companyInfo.lng, newLat, newLng) / 1000;
+        if (newDistanceKm > 200) {
+          setFixLocationMessage(`A nova busca ainda deu uma localização muito distante (${newDistanceKm.toFixed(1)}km) — o endereço cadastrado pode ter algum erro de digitação. Confira com o cliente.`);
+          return;
+        }
+      }
+
+      await setDoc(doc(db, 'users', u.id), { lat: newLat, lng: newLng }, { merge: true });
+      setViewingUser({ ...u, lat: newLat, lng: newLng });
+      setUsers(prev => prev.map(usr => usr.id === u.id ? { ...usr, lat: newLat, lng: newLng } : usr));
+      setFixLocationMessage('Localização corrigida e salva com sucesso!');
+    } catch (err) {
+      console.error('Failed to fix user location', err);
+      setFixLocationMessage('Erro ao buscar a nova localização. Tenta de novo em alguns segundos.');
+    } finally {
+      setFixingLocation(false);
+    }
+  };
   const [searchParams, setSearchParams] = useSearchParams();
   const activeTab = (searchParams.get('tab') as 'realtime' | 'history' | 'crm' | 'settings' | 'loyalty' | 'users') || 'realtime';
   const setActiveTab = (tab: 'realtime' | 'history' | 'crm' | 'settings' | 'loyalty' | 'users') => setSearchParams({ tab });
@@ -403,23 +448,10 @@ export default function AdminDashboard() {
       let lng: number | undefined;
 
       try {
-        const fullQuery = `${street}, ${neighborhood}, ${city} - ${state}, ${formattedZip}, Brasil`;
-        const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(fullQuery)}`, {
-          headers: { 'User-Agent': 'Restaurante-App' }
-        });
-        const geodata = await res.json();
-        if (geodata && geodata.length > 0) {
-          lat = parseFloat(geodata[0].lat);
-          lng = parseFloat(geodata[0].lon);
-        } else {
-          const fallbackRes = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(formattedZip + ', Brasil')}`, {
-            headers: { 'User-Agent': 'Restaurante-App' }
-          });
-          const fallbackData = await fallbackRes.json();
-          if (fallbackData && fallbackData.length > 0) {
-            lat = parseFloat(fallbackData[0].lat);
-            lng = parseFloat(fallbackData[0].lon);
-          }
+        const geo = await geocodeBrazilianAddress({ street, neighborhood, city, state, zip: formattedZip });
+        if (geo) {
+          lat = geo.lat;
+          lng = geo.lng;
         }
       } catch (e) {
         console.error('Geocoding error:', e);
@@ -498,23 +530,17 @@ export default function AdminDashboard() {
       if (!storeLat || !storeLng) {
         try {
           const zipToSearch = companyInfo.addressZip || '25570-162';
-          const queryStr = `${companyInfo.addressStreet || ''} ${companyInfo.addressNumber || ''}, ${companyInfo.addressNeighborhood || ''}, ${companyInfo.addressCity || ''} - ${companyInfo.addressState || ''}, ${zipToSearch}, Brasil`;
-          const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&countrycodes=br&q=${encodeURIComponent(queryStr)}`, {
-            headers: { 'User-Agent': 'Restaurante-App' }
+          const geo = await geocodeBrazilianAddress({
+            street: companyInfo.addressStreet,
+            number: companyInfo.addressNumber,
+            neighborhood: companyInfo.addressNeighborhood,
+            city: companyInfo.addressCity,
+            state: companyInfo.addressState,
+            zip: zipToSearch,
           });
-          const geodata = await res.json();
-          if (geodata && geodata.length > 0) {
-            storeLat = parseFloat(geodata[0].lat);
-            storeLng = parseFloat(geodata[0].lon);
-          } else {
-            const fallbackRes = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(zipToSearch + ', Brasil')}`, {
-              headers: { 'User-Agent': 'Restaurante-App' }
-            });
-            const fallbackData = await fallbackRes.json();
-            if (fallbackData && fallbackData.length > 0) {
-              storeLat = parseFloat(fallbackData[0].lat);
-              storeLng = parseFloat(fallbackData[0].lon);
-            }
+          if (geo) {
+            storeLat = geo.lat;
+            storeLng = geo.lng;
           }
         } catch (e) {
           console.error('Geocoding on save error:', e);
@@ -1342,7 +1368,7 @@ export default function AdminDashboard() {
                       <td className="p-4 text-center">
                         <div className="flex items-center justify-center gap-2">
                           <button
-                            onClick={() => setViewingUser(u)}
+                            onClick={() => { setViewingUser(u); setFixLocationMessage(null); }}
                             className="inline-flex items-center gap-1 px-3 py-1.5 rounded text-[10px] font-black uppercase tracking-wider transition-colors bg-gray-100 text-gray-600 hover:bg-gray-200"
                             title="Ver dados de cadastro (telefone, endereço, localização)"
                           >
@@ -1410,14 +1436,14 @@ export default function AdminDashboard() {
         const geocodeLooksWrong = distanceFromStoreKm !== null && distanceFromStoreKm > 200;
 
         return (
-          <div className="fixed inset-0 z-[80] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setViewingUser(null)}>
+          <div className="fixed inset-0 z-[80] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => { setViewingUser(null); setFixLocationMessage(null); }}>
             <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
               <div className="p-5 border-b border-gray-100 flex items-center justify-between sticky top-0 bg-white">
                 <div>
                   <h3 className="text-sm font-black text-gray-900 uppercase tracking-wider">{u.name}</h3>
                   <p className="text-[10px] text-gray-400 font-bold">{u.email}</p>
                 </div>
-                <button onClick={() => setViewingUser(null)} className="p-1.5 text-gray-400 hover:bg-gray-100 rounded-full">
+                <button onClick={() => { setViewingUser(null); setFixLocationMessage(null); }} className="p-1.5 text-gray-400 hover:bg-gray-100 rounded-full">
                   <X size={16} />
                 </button>
               </div>
@@ -1438,7 +1464,17 @@ export default function AdminDashboard() {
                 </div>
 
                 <div>
-                  <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Localização (usada para calcular o raio de entrega)</p>
+                  <div className="flex items-center justify-between mb-1">
+                    <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Localização (usada para calcular o raio de entrega)</p>
+                    <button
+                      onClick={() => handleFixUserLocation(u)}
+                      disabled={fixingLocation}
+                      className="text-[9px] font-black text-brand hover:underline uppercase tracking-wider disabled:opacity-50 disabled:no-underline flex items-center gap-1"
+                    >
+                      {fixingLocation ? <RefreshCw size={10} className="animate-spin" /> : <RefreshCw size={10} />}
+                      {fixingLocation ? 'Recalculando...' : 'Recalcular localização'}
+                    </button>
+                  </div>
                   {u.lat && u.lng ? (
                     <div className="flex items-center gap-2">
                       <p className="text-xs font-bold text-gray-800">{u.lat.toFixed(5)}, {u.lng.toFixed(5)}</p>
@@ -1454,6 +1490,9 @@ export default function AdminDashboard() {
                   ) : (
                     <p className="text-xs text-gray-400 font-bold">Ainda não calculada (o cliente nunca finalizou um pedido de delivery, ou o endereço não tem CEP/rua completos)</p>
                   )}
+                  {fixLocationMessage && (
+                    <p className="text-[10px] font-bold mt-1.5 text-gray-600">{fixLocationMessage}</p>
+                  )}
                 </div>
 
                 {distanceFromStoreKm !== null && (
@@ -1465,9 +1504,19 @@ export default function AdminDashboard() {
                       {distanceFromStoreKm.toFixed(1)} km
                     </p>
                     {geocodeLooksWrong && (
-                      <p className="text-[10px] text-red-700 font-semibold mt-1.5 leading-relaxed">
-                        Uma distância tão grande normalmente significa que o serviço gratuito de mapas (Nominatim) confundiu o endereço com um lugar de nome parecido em outra cidade — não que o cliente está mesmo fora da área. Peça pro cliente abrir <strong>Meus Dados</strong> e salvar o endereço de novo (o app já foi corrigido pra incluir o estado na busca, o que deve resolver); ou toque em "Ver no mapa" acima pra conferir visualmente.
-                      </p>
+                      <>
+                        <p className="text-[10px] text-red-700 font-semibold mt-1.5 leading-relaxed">
+                          Uma distância tão grande normalmente significa que o serviço gratuito de mapas (Nominatim) confundiu o endereço com um lugar de nome parecido em outra cidade — não que o cliente está mesmo fora da área.
+                        </p>
+                        <button
+                          onClick={() => handleFixUserLocation(u)}
+                          disabled={fixingLocation}
+                          className="mt-2 w-full bg-red-600 text-white text-[10px] font-black uppercase tracking-widest py-2 rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-1.5"
+                        >
+                          {fixingLocation ? <RefreshCw size={12} className="animate-spin" /> : <RefreshCw size={12} />}
+                          {fixingLocation ? 'Corrigindo...' : 'Corrigir localização agora'}
+                        </button>
+                      </>
                     )}
                   </div>
                 )}

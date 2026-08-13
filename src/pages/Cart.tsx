@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
-import { formatCurrency, calculateDistance, formatSizeLabel } from '../lib/utils';
+import { formatCurrency, calculateDistance, formatSizeLabel, geocodeBrazilianAddress } from '../lib/utils';
 import { collection, addDoc, doc, onSnapshot } from 'firebase/firestore';
 import { db, sanitizeForFirestore } from '../lib/firebase';
 import { notifyAdminsOfNewOrder } from '../lib/push';
@@ -162,19 +162,17 @@ export default function Cart() {
 
       if (!restaurantLat || !restaurantLng) {
         if (companyInfo?.addressStreet && companyInfo?.addressCity) {
-          try {
-            const zipStr = companyInfo.addressZip || '';
-            const query = `${companyInfo.addressStreet} ${companyInfo.addressNumber || ''}, ${companyInfo.addressNeighborhood || ''}, ${companyInfo.addressCity}, ${zipStr}, Brasil`;
-            const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}`, {
-              headers: { 'User-Agent': 'Restaurante-App' }
-            });
-            const geodata = await res.json();
-            if (geodata && geodata.length > 0) {
-              restaurantLat = parseFloat(geodata[0].lat);
-              restaurantLng = parseFloat(geodata[0].lon);
-            }
-          } catch (e) {
-            console.error("Geocoding store location failed", e);
+          const geo = await geocodeBrazilianAddress({
+            street: companyInfo.addressStreet,
+            number: companyInfo.addressNumber,
+            neighborhood: companyInfo.addressNeighborhood,
+            city: companyInfo.addressCity,
+            state: companyInfo.addressState,
+            zip: companyInfo.addressZip,
+          });
+          if (geo) {
+            restaurantLat = geo.lat;
+            restaurantLng = geo.lng;
           }
         }
         if (!restaurantLat || !restaurantLng) {
@@ -183,29 +181,21 @@ export default function Cart() {
         }
       }
 
-      // Missing the state in the query lets the free geocoder match a
-      // same-named street/neighborhood in a completely different city —
-      // this is what produced a customer's reported "1081km away" false
-      // positive despite living a few km from the restaurant. Including
-      // the state (like the restaurant's own address geocode already
-      // does) and restricting to Brazil makes that mismatch far less
-      // likely going forward.
-      const geocodeUserAddress = async (): Promise<{ lat: number; lng: number } | null> => {
-        if (!user.addressStreet || !user.addressCity || !user.addressZip) return null;
-        try {
-          const query = `${user.addressStreet} ${user.addressNumber || ''}, ${user.addressNeighborhood || ''}, ${user.addressCity} - ${user.addressState || ''}, ${user.addressZip}, Brasil`;
-          const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&countrycodes=br&q=${encodeURIComponent(query)}`, {
-            headers: { 'User-Agent': 'Restaurante-App' }
-          });
-          const geodata = await res.json();
-          if (geodata && geodata.length > 0) {
-            return { lat: parseFloat(geodata[0].lat), lng: parseFloat(geodata[0].lon) };
-          }
-        } catch (e) {
-          console.error("Geocoding on checkout failed", e);
-        }
-        return null;
-      };
+      // Free geocoding has real coverage gaps for minor Brazilian streets —
+      // this backs off through progressively broader (but still real)
+      // queries instead of ever falling back to a bare CEP search, which
+      // is what produced a customer's reported "1081km away" false
+      // positive: her street isn't mapped, and the old CEP-only fallback
+      // misparsed the tail of her CEP as an unrelated place in another
+      // state entirely.
+      const geocodeUserAddress = () => geocodeBrazilianAddress({
+        street: user.addressStreet,
+        number: user.addressNumber,
+        neighborhood: user.addressNeighborhood,
+        city: user.addressCity,
+        state: user.addressState,
+        zip: user.addressZip,
+      });
 
       let userLat = user.lat;
       let userLng = user.lng;
