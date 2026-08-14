@@ -150,6 +150,16 @@ export default function AdminDashboard() {
   const [finances, setFinances] = useState<FinanceEntry[]>([]);
   const [users, setUsers] = useState<any[]>([]);
   const [stats, setStats] = useState({ pending: 0, preparing: 0, todayTotal: 0 });
+
+  // Real neighborhood names already on file from registered customers —
+  // used as autocomplete suggestions when adding a bairro fee, so the
+  // admin picks a name that actually matches what customers have, instead
+  // of typing a new variant that silently collides/mismatches later.
+  const knownNeighborhoods = useMemo(() => {
+    const set = new Set<string>();
+    users.forEach(u => { if (u.addressNeighborhood) set.add(String(u.addressNeighborhood).trim()); });
+    return Array.from(set).sort((a, b) => a.localeCompare(b, 'pt-BR'));
+  }, [users]);
   
   // Settings Form State
   const [companyInfo, setCompanyInfo] = useState<CompanyInfo>({
@@ -1885,13 +1895,18 @@ export default function AdminDashboard() {
                 </button>
               </div>
               <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider mb-4">Caso o cliente preencha um bairro listado aqui, a taxa de entrega dele será definida automaticamente com o valor correspondente.</p>
-              
+
+              <datalist id="bairros-conhecidos">
+                {knownNeighborhoods.map(n => <option key={n} value={n} />)}
+              </datalist>
+
               <div className="space-y-2 max-h-60 overflow-y-auto pr-2">
                 {(companyInfo.neighborhoodFees || []).map((nh, idx) => (
                   <div key={idx} className="flex items-center gap-2 bg-gray-50 p-2 rounded-lg border border-gray-100">
                     <input
                       type="text"
-                      placeholder="Nome do Bairro"
+                      list="bairros-conhecidos"
+                      placeholder="Buscar/digitar nome do bairro"
                       value={nh.name}
                       onChange={(e) => {
                         const newFees = [...(companyInfo.neighborhoodFees || [])];
@@ -1918,10 +1933,16 @@ export default function AdminDashboard() {
                     </div>
                     <button
                       type="button"
-                      onClick={() => {
+                      onClick={async () => {
+                        if (!window.confirm(`Remover "${nh.name || 'este bairro'}" da lista? Isso salva direto no banco de dados, sem precisar clicar em "Salvar Alterações".`)) return;
                         const newFees = [...(companyInfo.neighborhoodFees || [])];
                         newFees.splice(idx, 1);
-                        setCompanyInfo({ ...companyInfo, neighborhoodFees: newFees });
+                        try {
+                          await setDoc(doc(db, 'settings', 'company_info'), { neighborhoodFees: newFees }, { merge: true });
+                          setCompanyInfo({ ...companyInfo, neighborhoodFees: newFees });
+                        } catch (err) {
+                          handleFirestoreError(err, OperationType.UPDATE, 'settings/company_info');
+                        }
                       }}
                       className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded"
                     >
