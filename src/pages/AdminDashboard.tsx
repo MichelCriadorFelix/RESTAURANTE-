@@ -156,6 +156,7 @@ export default function AdminDashboard() {
   // admin picks a name that actually matches what customers have, instead
   // of typing a new variant that silently collides/mismatches later.
   const [neighborhoodSuggestIdx, setNeighborhoodSuggestIdx] = useState<number | null>(null);
+  const [neighborhoodFilterQuery, setNeighborhoodFilterQuery] = useState('');
   const knownNeighborhoods = useMemo(() => {
     const set = new Set<string>();
     users.forEach(u => { if (u.addressNeighborhood) set.add(String(u.addressNeighborhood).trim()); });
@@ -1897,8 +1898,22 @@ export default function AdminDashboard() {
               </div>
               <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider mb-4">Caso o cliente preencha um bairro listado aqui, a taxa de entrega dele será definida automaticamente com o valor correspondente.</p>
 
+              <div className="relative mb-3">
+                <Search size={12} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="Buscar bairro já cadastrado na lista abaixo..."
+                  value={neighborhoodFilterQuery}
+                  onChange={e => setNeighborhoodFilterQuery(e.target.value)}
+                  className="w-full pl-8 pr-3 py-2 border border-gray-200 bg-white rounded-lg text-[10px] font-bold text-gray-800 focus:outline-none focus:ring-2 focus:ring-brand/20 focus:border-brand"
+                />
+              </div>
+
               <div className="space-y-2 max-h-60 overflow-y-auto pr-2">
-                {(companyInfo.neighborhoodFees || []).map((nh, idx) => {
+                {(companyInfo.neighborhoodFees || [])
+                  .map((nh, idx) => ({ nh, idx }))
+                  .filter(({ nh }) => !neighborhoodFilterQuery.trim() || normalizeText(nh.name || '').includes(normalizeText(neighborhoodFilterQuery)))
+                  .map(({ nh, idx }) => {
                   const suggestions = neighborhoodSuggestIdx === idx
                     ? (() => {
                         const q = normalizeText(nh.name || '');
@@ -1984,6 +1999,12 @@ export default function AdminDashboard() {
                 {(!companyInfo.neighborhoodFees || companyInfo.neighborhoodFees.length === 0) && (
                   <div className="text-center py-4 bg-gray-50 rounded-lg border border-dashed border-gray-200">
                     <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Nenhum bairro configurado</p>
+                  </div>
+                )}
+                {companyInfo.neighborhoodFees && companyInfo.neighborhoodFees.length > 0 && neighborhoodFilterQuery.trim() &&
+                  !companyInfo.neighborhoodFees.some(nh => normalizeText(nh.name || '').includes(normalizeText(neighborhoodFilterQuery))) && (
+                  <div className="text-center py-4 bg-gray-50 rounded-lg border border-dashed border-gray-200">
+                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Nenhum bairro encontrado para "{neighborhoodFilterQuery}"</p>
                   </div>
                 )}
               </div>
