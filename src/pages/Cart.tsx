@@ -88,13 +88,24 @@ export default function Cart() {
 
     if (companyInfo?.neighborhoodFees && user?.addressNeighborhood && cityMatches) {
       const normalizedUser = normalize(user.addressNeighborhood);
-      const match = companyInfo.neighborhoodFees.find(nh => {
-        const normalizedName = normalize(nh.name);
-        if (!normalizedName) return false;
-        return normalizedUser === normalizedName
-          || normalizedUser.includes(normalizedName)
-          || normalizedName.includes(normalizedUser);
-      });
+
+      // An exact match always wins. Otherwise, among substring matches,
+      // the longest (most specific) registered name wins — picking
+      // whichever entry happened to come first in the list let a short,
+      // generic bairro name (e.g. "São João") shadow a more specific one
+      // that's a superset of it ("Vila São João"), silently charging the
+      // wrong delivery fee for any customer whose real neighborhood
+      // contained the generic name as a substring.
+      let match = companyInfo.neighborhoodFees.find(nh => normalize(nh.name) === normalizedUser);
+      if (!match) {
+        const candidates = companyInfo.neighborhoodFees
+          .map(nh => ({ nh, normalizedName: normalize(nh.name) }))
+          .filter(({ normalizedName }) => normalizedName && (
+            normalizedUser.includes(normalizedName) || normalizedName.includes(normalizedUser)
+          ));
+        candidates.sort((a, b) => b.normalizedName.length - a.normalizedName.length);
+        match = candidates[0]?.nh;
+      }
       if (match) {
         return { calculatedDeliveryFee: match.fee, isNeighborhoodExplicitlyAllowed: true, isCityServed: true };
       }
