@@ -57,42 +57,49 @@ export default function Cart() {
     ? (!user?.phone || !user?.address)
     : !user?.phone;
 
-  const { calculatedDeliveryFee, isNeighborhoodExplicitlyAllowed } = React.useMemo(() => {
-    if (serviceType !== 'delivery') return { calculatedDeliveryFee: 0, isNeighborhoodExplicitlyAllowed: false };
-    if (companyInfo?.neighborhoodFees && user?.addressNeighborhood) {
-      // Case/accent-insensitive, and tolerant of extra whitespace or minor
-      // wording differences either side (e.g. customer's "Vila Sao Joao,
-      // perto do posto" vs the admin's registered "Vila São João") — an
-      // exact-only match was silently falling back to the base delivery
-      // fee for any real-world typo/variation instead of the bairro rate.
-      const normalize = (s: string) => s
-        .trim()
-        .toLowerCase()
-        .normalize('NFD')
-        .replace(/[̀-ͯ]/g, '')
-        .replace(/\s+/g, ' ');
-      // Also require the customer's city to agree with the store's city
-      // (when both are filled in) — the registered bairro list is only
-      // meaningful for the store's own municipality, so a same-named
-      // neighborhood elsewhere shouldn't slip through the allow-list.
-      const cityMatches = !companyInfo.addressCity || !user.addressCity ? true : (() => {
-        const nc = normalize(user.addressCity);
-        const cc = normalize(companyInfo.addressCity);
-        return nc === cc || nc.includes(cc) || cc.includes(nc);
-      })();
+  const { calculatedDeliveryFee, isNeighborhoodExplicitlyAllowed, isCityServed } = React.useMemo(() => {
+    if (serviceType !== 'delivery') return { calculatedDeliveryFee: 0, isNeighborhoodExplicitlyAllowed: false, isCityServed: true };
+
+    // Case/accent-insensitive, and tolerant of extra whitespace or minor
+    // wording differences either side (e.g. customer's "Vila Sao Joao,
+    // perto do posto" vs the admin's registered "Vila São João") — an
+    // exact-only match was silently falling back to the base delivery
+    // fee for any real-world typo/variation instead of the bairro rate.
+    const normalize = (s: string) => s
+      .trim()
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[̀-ͯ]/g, '')
+      .replace(/\s+/g, ' ');
+
+    // The store's registered city is a reliable, non-geocoded signal for
+    // "do we deliver here at all" — it comes straight from the CEP lookup
+    // (now locked in Profile.tsx, so it can't be hand-edited wrong), not
+    // from the free geocoding service that has real coverage gaps and
+    // caused a false "1081km away" rejection for a customer whose street
+    // simply wasn't mapped. A different municipality entirely is blocked
+    // by this city check; a customer in the right city whose bairro just
+    // isn't registered yet is not (see deliveryFeePending below).
+    const cityMatches = !companyInfo?.addressCity || !user?.addressCity ? true : (() => {
+      const nc = normalize(user.addressCity);
+      const cc = normalize(companyInfo.addressCity);
+      return nc === cc || nc.includes(cc) || cc.includes(nc);
+    })();
+
+    if (companyInfo?.neighborhoodFees && user?.addressNeighborhood && cityMatches) {
       const normalizedUser = normalize(user.addressNeighborhood);
-      const match = cityMatches ? companyInfo.neighborhoodFees.find(nh => {
+      const match = companyInfo.neighborhoodFees.find(nh => {
         const normalizedName = normalize(nh.name);
         if (!normalizedName) return false;
         return normalizedUser === normalizedName
           || normalizedUser.includes(normalizedName)
           || normalizedName.includes(normalizedUser);
-      }) : undefined;
+      });
       if (match) {
-        return { calculatedDeliveryFee: match.fee, isNeighborhoodExplicitlyAllowed: true };
+        return { calculatedDeliveryFee: match.fee, isNeighborhoodExplicitlyAllowed: true, isCityServed: true };
       }
     }
-    return { calculatedDeliveryFee: companyInfo?.deliveryFee || 0, isNeighborhoodExplicitlyAllowed: false };
+    return { calculatedDeliveryFee: companyInfo?.deliveryFee || 0, isNeighborhoodExplicitlyAllowed: false, isCityServed: cityMatches };
   }, [serviceType, companyInfo, user?.addressNeighborhood, user?.addressCity]);
 
   const userPoints = user?.points || 0;
@@ -153,6 +160,15 @@ export default function Cart() {
       setTimeout(() => {
         navigate('/profile');
       }, 3000);
+      return;
+    }
+
+    if (serviceType === 'delivery' && !isCityServed) {
+      setAlertState({
+        type: 'error',
+        message: 'Fora da área de entrega',
+        submessage: `Infelizmente ainda não entregamos em ${user?.addressCity || 'sua cidade'}. Nossas entregas são feitas apenas em ${companyInfo?.addressCity || 'nossa cidade'}.`
+      });
       return;
     }
 
