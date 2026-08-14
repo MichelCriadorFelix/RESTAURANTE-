@@ -81,6 +81,7 @@ export interface Order {
   items: CartItem[];
   total: number;
   deliveryFee?: number;
+  deliveryFeePending?: boolean;
   serviceType?: ServiceType;
   tableNumber?: string;
   status: OrderStatus;

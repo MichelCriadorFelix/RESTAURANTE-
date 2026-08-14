@@ -71,20 +71,29 @@ export default function Cart() {
         .normalize('NFD')
         .replace(/[̀-ͯ]/g, '')
         .replace(/\s+/g, ' ');
+      // Also require the customer's city to agree with the store's city
+      // (when both are filled in) — the registered bairro list is only
+      // meaningful for the store's own municipality, so a same-named
+      // neighborhood elsewhere shouldn't slip through the allow-list.
+      const cityMatches = !companyInfo.addressCity || !user.addressCity ? true : (() => {
+        const nc = normalize(user.addressCity);
+        const cc = normalize(companyInfo.addressCity);
+        return nc === cc || nc.includes(cc) || cc.includes(nc);
+      })();
       const normalizedUser = normalize(user.addressNeighborhood);
-      const match = companyInfo.neighborhoodFees.find(nh => {
+      const match = cityMatches ? companyInfo.neighborhoodFees.find(nh => {
         const normalizedName = normalize(nh.name);
         if (!normalizedName) return false;
         return normalizedUser === normalizedName
           || normalizedUser.includes(normalizedName)
           || normalizedName.includes(normalizedUser);
-      });
+      }) : undefined;
       if (match) {
         return { calculatedDeliveryFee: match.fee, isNeighborhoodExplicitlyAllowed: true };
       }
     }
     return { calculatedDeliveryFee: companyInfo?.deliveryFee || 0, isNeighborhoodExplicitlyAllowed: false };
-  }, [serviceType, companyInfo, user?.addressNeighborhood]);
+  }, [serviceType, companyInfo, user?.addressNeighborhood, user?.addressCity]);
 
   const userPoints = user?.points || 0;
   const availableRewards = companyInfo?.loyaltyEnabled ? (companyInfo.loyaltyRewards || []) : [];
@@ -154,8 +163,21 @@ export default function Cart() {
     setLoading(true);
 
     let finalDeliveryFee = calculatedDeliveryFee;
+    let deliveryFeePending = false;
 
-    // Execute distance calculation only for delivery orders
+    // A bairro that isn't on the registered fee list is never allowed to
+    // block the order — a false "fora da área" rejection is a lost sale,
+    // and free geocoding has real coverage gaps for minor Brazilian
+    // streets (this is exactly what produced a customer's false
+    // "1081km away" rejection). Instead the order goes through flagged
+    // for the admin to set the fee and confirm it with the customer.
+    // Distance is still computed best-effort below, purely to keep the
+    // customer's stored coordinates fresh and for diagnostics/logging —
+    // it can no longer stop checkout.
+    if (serviceType === 'delivery' && !isNeighborhoodExplicitlyAllowed) {
+      deliveryFeePending = true;
+    }
+
     if (serviceType === 'delivery' && companyInfo?.deliveryRadiusKm && !isNeighborhoodExplicitlyAllowed) {
       let restaurantLat = companyInfo?.lat;
       let restaurantLng = companyInfo?.lng;
@@ -234,15 +256,9 @@ export default function Cart() {
         }
 
         if (distance > SANITY_LIMIT_METERS) {
-          console.warn(`Verificação de raio de entrega ignorada: distância calculada de ${(distance / 1000).toFixed(1)}km para o cliente ${user.uid} é implausível (provável erro do serviço de geolocalização gratuito), não um endereço realmente fora da área.`);
+          console.warn(`Distância calculada de ${(distance / 1000).toFixed(1)}km para o cliente ${user.uid} é implausível (provável erro do serviço de geolocalização gratuito) — pedido segue normalmente, já que o bairro não está na lista cadastrada e a taxa foi marcada para confirmação do admin.`);
         } else if (distance > companyInfo.deliveryRadiusKm * 1000) {
-          setAlertState({
-            type: 'error',
-            message: 'Fora da área de entrega',
-            submessage: `Desculpe, o seu endereço está a ${(distance/1000).toFixed(1)}km, o que ultrapassa o nosso raio máximo de entrega (${companyInfo.deliveryRadiusKm}km).`
-          });
-          setLoading(false);
-          return;
+          console.warn(`Pedido do cliente ${user.uid} está a ${(distance/1000).toFixed(1)}km, além do raio configurado (${companyInfo.deliveryRadiusKm}km) — não bloqueado pois o bairro não está na lista cadastrada; taxa marcada para confirmação do admin.`);
         }
       }
     }
@@ -289,6 +305,7 @@ export default function Cart() {
         items,
         total: finalTotal,
         deliveryFee: finalDeliveryFee,
+        deliveryFeePending: serviceType === 'delivery' ? deliveryFeePending : false,
         serviceType,
         tableNumber: serviceType === 'dine_in' ? (tableNumber.trim() || null) : null,
         status: 'pending_payment',
@@ -492,10 +509,17 @@ ${window.location.origin}/orders/${orderRef.id}`;
             <span className="text-gray-500 font-bold">Taxa de Entrega</span>
             <span className="font-black text-gray-900">
               {serviceType === 'delivery'
-                ? (calculatedDeliveryFee > 0 ? formatCurrency(calculatedDeliveryFee) : 'Grátis')
+                ? (user?.addressNeighborhood && !isNeighborhoodExplicitlyAllowed
+                    ? 'A confirmar'
+                    : (calculatedDeliveryFee > 0 ? formatCurrency(calculatedDeliveryFee) : 'Grátis'))
                 : 'Grátis'}
             </span>
           </div>
+          {serviceType === 'delivery' && user?.addressNeighborhood && !isNeighborhoodExplicitlyAllowed && (
+            <p className="text-[11px] text-amber-800 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2 font-semibold leading-relaxed">
+              Ainda não temos uma taxa de entrega cadastrada para o seu bairro. Vamos confirmar o valor com você por telefone/WhatsApp antes de despachar o pedido.
+            </p>
+          )}
           {selectedReward && (
             <div className="flex justify-between items-center text-sm">
               <span className="text-emerald-600 font-bold">Desconto ({selectedReward.label})</span>

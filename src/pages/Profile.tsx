@@ -34,6 +34,15 @@ export default function Profile() {
   const [saved, setSaved] = useState(false);
   const [cepLoading, setCepLoading] = useState(false);
   const [cepError, setCepError] = useState('');
+  // Rua/Bairro/Cidade/UF are only ever filled in by a successful CEP
+  // lookup, never typed by hand — a customer once left the CEP short a
+  // digit and hand-filled the rest of the address wrong, which broke
+  // delivery-fee/area matching downstream. Locked until a fresh lookup
+  // resolves them again.
+  const [cepConfirmed, setCepConfirmed] = useState(() => {
+    const digits = (user?.addressZip || '').replace(/\D/g, '');
+    return digits.length === 8 && !!user?.addressStreet;
+  });
 
   // Update form if user data loads late
   useEffect(() => {
@@ -50,6 +59,8 @@ export default function Profile() {
         addressZip: user.addressZip || '',
         addressReference: user.addressReference || '',
       });
+      const digits = (user.addressZip || '').replace(/\D/g, '');
+      setCepConfirmed(digits.length === 8 && !!user.addressStreet);
     }
   }, [user]);
 
@@ -76,13 +87,25 @@ export default function Profile() {
   const handleCEPChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const rawValue = e.target.value;
     const digits = rawValue.replace(/\D/g, '').slice(0, 8);
-    
+
     let formatted = digits;
     if (digits.length > 5) {
       formatted = `${digits.slice(0, 5)}-${digits.slice(5)}`;
     }
-    
-    setFormData(prev => ({ ...prev, addressZip: formatted }));
+
+    // Any edit to the CEP invalidates the previously auto-filled address —
+    // never leave a stale street/bairro/cidade paired with a new/incomplete
+    // CEP that hasn't been re-validated.
+    setCepConfirmed(false);
+    setCepError('');
+    setFormData(prev => ({
+      ...prev,
+      addressZip: formatted,
+      addressStreet: '',
+      addressNeighborhood: '',
+      addressCity: '',
+      addressState: '',
+    }));
 
     if (digits.length === 8) {
       lookupCEP(digits);
@@ -95,20 +118,23 @@ export default function Profile() {
     try {
       const response = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
       const data = await response.json();
-      
+
       if (data.erro) {
-        setCepError('CEP não encontrado.');
+        setCepError('CEP não encontrado. Confira o número e tente novamente.');
+        setCepConfirmed(false);
       } else {
         setFormData(prev => ({
           ...prev,
-          addressStreet: data.logradouro || prev.addressStreet,
-          addressNeighborhood: data.bairro || prev.addressNeighborhood,
-          addressCity: data.localidade || prev.addressCity,
-          addressState: data.uf || prev.addressState,
+          addressStreet: data.logradouro || '',
+          addressNeighborhood: data.bairro || '',
+          addressCity: data.localidade || '',
+          addressState: data.uf || '',
         }));
+        setCepConfirmed(true);
       }
     } catch (err) {
-      setCepError('Erro ao buscar o CEP.');
+      setCepError('Erro ao buscar o CEP. Tente novamente.');
+      setCepConfirmed(false);
     } finally {
       setCepLoading(false);
     }
@@ -116,6 +142,12 @@ export default function Profile() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    const zipDigits = formData.addressZip.replace(/\D/g, '');
+    if (zipDigits.length !== 8 || !cepConfirmed) {
+      setCepError('Informe um CEP válido e aguarde o endereço ser preenchido automaticamente antes de salvar.');
+      return;
+    }
 
     // Assemble the complete unified formatted address string
     const parts = [];
@@ -276,6 +308,12 @@ export default function Profile() {
             {/* Empty space on desktop for grid visual balance */}
             <div className="hidden md:block md:col-span-4" />
 
+            <div className="md:col-span-6 -mt-2">
+              <p className="text-[9px] text-gray-400 font-semibold leading-relaxed">
+                Rua, bairro, cidade e estado são preenchidos automaticamente pelo CEP e não podem ser digitados — isso evita erros que travam a taxa de entrega. Para complementos, use "Ponto de Referência".
+              </p>
+            </div>
+
             {/* Rua */}
             <div className="md:col-span-4">
               <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-1.5">
@@ -284,10 +322,10 @@ export default function Profile() {
               <input
                 type="text"
                 required
-                placeholder="Rua, Avenida, Travessa..."
+                readOnly
+                placeholder="Preenchido automaticamente pelo CEP"
                 value={formData.addressStreet}
-                onChange={e => setFormData({ ...formData, addressStreet: e.target.value })}
-                className="w-full px-3.5 py-2.5 border border-gray-200 bg-gray-50 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand/20 focus:border-brand transition-colors font-medium"
+                className="w-full px-3.5 py-2.5 border border-gray-200 bg-gray-100 rounded-lg text-sm text-gray-600 cursor-not-allowed font-medium"
               />
             </div>
 
@@ -328,10 +366,10 @@ export default function Profile() {
               <input
                 type="text"
                 required
-                placeholder="Nome do bairro"
+                readOnly
+                placeholder="Preenchido automaticamente pelo CEP"
                 value={formData.addressNeighborhood}
-                onChange={e => setFormData({ ...formData, addressNeighborhood: e.target.value })}
-                className="w-full px-3.5 py-2.5 border border-gray-200 bg-gray-50 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand/20 focus:border-brand transition-colors font-medium"
+                className="w-full px-3.5 py-2.5 border border-gray-200 bg-gray-100 rounded-lg text-sm text-gray-600 cursor-not-allowed font-medium"
               />
             </div>
 
@@ -343,10 +381,10 @@ export default function Profile() {
               <input
                 type="text"
                 required
-                placeholder="Cidade"
+                readOnly
+                placeholder="Preenchido automaticamente pelo CEP"
                 value={formData.addressCity}
-                onChange={e => setFormData({ ...formData, addressCity: e.target.value })}
-                className="w-full px-3.5 py-2.5 border border-gray-200 bg-gray-50 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand/20 focus:border-brand transition-colors font-medium"
+                className="w-full px-3.5 py-2.5 border border-gray-200 bg-gray-100 rounded-lg text-sm text-gray-600 cursor-not-allowed font-medium"
               />
             </div>
 
@@ -357,11 +395,11 @@ export default function Profile() {
               </label>
               <select
                 required
+                disabled
                 value={formData.addressState}
-                onChange={e => setFormData({ ...formData, addressState: e.target.value })}
-                className="w-full px-3.5 py-2.5 border border-gray-200 bg-gray-50 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand/20 focus:border-brand transition-colors font-medium uppercase"
+                className="w-full px-3.5 py-2.5 border border-gray-200 bg-gray-100 rounded-lg text-sm text-gray-600 cursor-not-allowed font-medium uppercase"
               >
-                <option value="">Selecione...</option>
+                <option value="">Preenchido pelo CEP</option>
                 <option value="AC">AC</option>
                 <option value="AL">AL</option>
                 <option value="AP">AP</option>
@@ -440,7 +478,8 @@ export default function Profile() {
           )}
           <button
             type="submit"
-            className="bg-brand text-white px-6 py-3.5 rounded-xl shadow-sm hover:bg-brand-dark flex items-center gap-2 text-xs font-black uppercase tracking-widest transition-colors cursor-pointer select-none"
+            disabled={!cepConfirmed || cepLoading}
+            className="bg-brand text-white px-6 py-3.5 rounded-xl shadow-sm hover:bg-brand-dark flex items-center gap-2 text-xs font-black uppercase tracking-widest transition-colors cursor-pointer select-none disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Save size={16} />
             Salvar Dados

@@ -108,6 +108,9 @@ export default function OrderDetails() {
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const [deliveryFeeInput, setDeliveryFeeInput] = useState('');
+  const [savingDeliveryFee, setSavingDeliveryFee] = useState(false);
+
   const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
   const [selectedPrinterSize, setSelectedPrinterSize] = useState<'80mm' | '58mm'>('80mm');
   const [printType, setPrintType] = useState<'delivery' | 'kitchen' | 'both'>('delivery');
@@ -472,6 +475,54 @@ export default function OrderDetails() {
     setTimeout(() => setCopied(false), 2000);
   };
 
+  const handleConfirmDeliveryFee = async () => {
+    if (!order || !id) return;
+    const newFee = parseFloat(deliveryFeeInput.replace(',', '.'));
+    if (isNaN(newFee) || newFee < 0) {
+      setAlert({
+        type: 'error',
+        message: 'Valor inválido',
+        submessage: 'Informe um valor de taxa de entrega válido.'
+      });
+      return;
+    }
+    setSavingDeliveryFee(true);
+    try {
+      const oldFee = order.deliveryFee || 0;
+      const newTotal = order.total - oldFee + newFee;
+      await updateDoc(doc(db, 'orders', id), {
+        deliveryFee: newFee,
+        deliveryFeePending: false,
+        total: newTotal,
+        updatedAt: Date.now()
+      });
+      setOrder(prev => prev ? { ...prev, deliveryFee: newFee, deliveryFeePending: false, total: newTotal } : null);
+      setDeliveryFeeInput('');
+
+      await addDoc(collection(db, 'orders', id, 'messages'), {
+        senderId: 'system',
+        senderName: companyInfo.name || 'Estabelecimento',
+        text: `📦 A taxa de entrega do seu pedido foi confirmada em ${formatCurrency(newFee)}. Total atualizado do pedido: ${formatCurrency(newTotal)}.`,
+        createdAt: Date.now()
+      });
+
+      setAlert({
+        type: 'success',
+        message: 'Taxa de entrega confirmada',
+        submessage: `Cliente avisado no chat do pedido.`
+      });
+    } catch (err) {
+      console.error('Erro ao confirmar taxa de entrega:', err);
+      setAlert({
+        type: 'error',
+        message: 'Erro ao salvar',
+        submessage: 'Houve uma falha técnica ao confirmar a taxa de entrega.'
+      });
+    } finally {
+      setSavingDeliveryFee(false);
+    }
+  };
+
   const generatePrintHTML = (size: '80mm' | '58mm', type: 'delivery' | 'kitchen') => {
     if (!order) return '';
     const width = size === '80mm' ? '302px' : '219px';
@@ -484,24 +535,24 @@ export default function OrderDetails() {
           <meta charset="utf-8">
           <style>
             @page { margin: 0; }
-            body { 
-              width: ${width}; 
-              margin: 0; 
-              padding: 10px; 
-              font-family: 'Courier New', Courier, monospace; 
-              font-size: ${size === '80mm' ? '19px' : '16px'};
+            body {
+              width: ${width};
+              margin: 0;
+              padding: 10px;
+              font-family: 'Courier New', Courier, monospace;
+              font-size: ${size === '80mm' ? '23px' : '19px'};
               line-height: 1.2;
               color: #000;
               font-weight: 900;
             }
             .header { text-align: center; margin-bottom: 10px; border-bottom: 2px dashed #000; padding-bottom: 10px; }
-            .title { font-weight: 900; font-size: 1.3em; text-transform: uppercase; }
+            .title { font-weight: 900; font-size: 1em; text-transform: uppercase; }
             .section { margin-bottom: 10px; border-bottom: 2px dashed #000; padding-bottom: 5px; }
             .item { display: flex; justify-content: space-between; margin-bottom: 5px; font-weight: 800; }
-            .item-details { padding-left: 10px; font-size: 0.95em; font-weight: 600; }
-            .total-section { font-weight: 900; font-size: 1.2em; text-align: right; }
-            .footer { text-align: center; margin-top: 15px; font-size: 0.9em; font-weight: 800; }
-            .label { font-weight: 900; text-transform: uppercase; font-size: 0.9em; margin-bottom: 3px; }
+            .item-details { padding-left: 10px; font-size: 1em; font-weight: 600; }
+            .total-section { font-weight: 900; font-size: 1em; text-align: right; }
+            .footer { text-align: center; margin-top: 15px; font-size: 1em; font-weight: 800; }
+            .label { font-weight: 900; text-transform: uppercase; font-size: 1em; margin-bottom: 3px; }
             .divider { border-top: 2px dashed #000; margin: 5px 0; }
             @media print {
               .no-print { display: none !important; }
@@ -518,8 +569,8 @@ export default function OrderDetails() {
         <body onload="window.print();">
           <div class="header">
             <div class="title">${escapeHtml(companyInfo.name || 'IRMAOS PILAR')}</div>
-            <div style="font-size: 0.9em; margin-top: 5px;">PEDIDO #${escapeHtml(order.id.slice(-6).toUpperCase())}</div>
-            <div style="font-size: 0.8em;">${format(order.createdAt, 'dd/MM/yyyy HH:mm')}</div>
+            <div style="font-size: 1em; margin-top: 5px;">PEDIDO #${escapeHtml(order.id.slice(-6).toUpperCase())}</div>
+            <div style="font-size: 1em;">${format(order.createdAt, 'dd/MM/yyyy HH:mm')}</div>
           </div>
 
           ${!isKitchen ? `
@@ -564,7 +615,12 @@ export default function OrderDetails() {
               <span>SUBTOTAL:</span>
               <span>${formatCurrency(order.total - (order.deliveryFee || 0))}</span>
             </div>
-            ${order.deliveryFee ? `
+            ${order.deliveryFeePending ? `
+            <div class="item">
+              <span>TAXA ENTREGA:</span>
+              <span>A CONFIRMAR</span>
+            </div>
+            ` : order.deliveryFee ? `
             <div class="item">
               <span>TAXA ENTREGA:</span>
               <span>${formatCurrency(order.deliveryFee)}</span>
@@ -927,7 +983,12 @@ export default function OrderDetails() {
                 <span className="font-bold text-gray-500">Subtotal</span>
                 <span className="font-black text-gray-900">{formatCurrency(order.total - (order.deliveryFee || 0))}</span>
               </div>
-              {order.deliveryFee != null && order.deliveryFee > 0 && (
+              {order.deliveryFeePending ? (
+                <div className="flex justify-between items-center text-sm">
+                  <span className="font-bold text-gray-500">Taxa de Entrega</span>
+                  <span className="font-black text-amber-600">A confirmar</span>
+                </div>
+              ) : order.deliveryFee != null && order.deliveryFee > 0 && (
                 <div className="flex justify-between items-center text-sm">
                   <span className="font-bold text-gray-500">Taxa de Entrega</span>
                   <span className="font-black text-gray-900">{formatCurrency(order.deliveryFee)}</span>
@@ -997,6 +1058,49 @@ export default function OrderDetails() {
                 Observações do Cliente / Instruções Especiais
               </h3>
               <p className="text-xs font-bold leading-relaxed whitespace-pre-wrap">{order.notes}</p>
+            </div>
+          )}
+
+          {/* Customer-facing notice: delivery fee not yet confirmed */}
+          {!isAdmin && order.deliveryFeePending && (
+            <div className="mb-6 bg-amber-50 border border-amber-200 rounded-xl p-4 text-amber-900 shadow-sm">
+              <h3 className="font-black text-xs text-amber-950 mb-1.5 uppercase tracking-widest flex items-center gap-1.5">
+                <span className="w-2 h-2 bg-amber-600 rounded-full inline-block animate-pulse"></span>
+                Taxa de entrega a confirmar
+              </h3>
+              <p className="text-xs font-bold leading-relaxed">
+                Ainda não temos uma taxa de entrega cadastrada para o seu bairro. Vamos confirmar o valor com você por telefone/WhatsApp antes de despachar o pedido.
+              </p>
+            </div>
+          )}
+
+          {/* Admin: delivery fee pending confirmation */}
+          {isAdmin && order.serviceType === 'delivery' && order.deliveryFeePending && (
+            <div className="mb-6 bg-amber-50 border border-amber-200 rounded-xl p-4 shadow-sm">
+              <h3 className="font-black text-amber-950 text-xs uppercase tracking-widest mb-1 flex items-center gap-1.5">
+                <span className="w-2 h-2 bg-amber-600 rounded-full inline-block animate-pulse"></span>
+                Bairro não cadastrado — definir taxa de entrega
+              </h3>
+              <p className="text-amber-800 text-xs font-semibold mb-3 leading-relaxed">
+                O bairro deste cliente não está na lista de taxas cadastradas. Defina o valor da entrega abaixo — o cliente será avisado automaticamente no chat do pedido.
+              </p>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  value={deliveryFeeInput}
+                  onChange={e => setDeliveryFeeInput(e.target.value)}
+                  placeholder="Valor da taxa (R$)"
+                  className="flex-1 px-3 py-2 rounded-lg border border-amber-200 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-amber-400"
+                />
+                <button
+                  onClick={handleConfirmDeliveryFee}
+                  disabled={savingDeliveryFee || !deliveryFeeInput.trim()}
+                  className="bg-amber-600 text-white px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-widest hover:bg-amber-700 disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
+                >
+                  {savingDeliveryFee ? 'Salvando...' : 'Confirmar Taxa'}
+                </button>
+              </div>
             </div>
           )}
 
