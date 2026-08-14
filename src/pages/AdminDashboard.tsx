@@ -5,7 +5,7 @@ import { db, sanitizeForFirestore, handleFirestoreError, OperationType } from '.
 import { useAuth } from '../context/AuthContext';
 import { registerPushForAdmin } from '../lib/push';
 import { Order, FinanceEntry, CompanyInfo } from '../types';
-import { formatCurrency, formatSizeLabel, compressAndUploadImage, migrateBase64ImageToStorage, calculateDistance, geocodeBrazilianAddress } from '../lib/utils';
+import { formatCurrency, formatSizeLabel, compressAndUploadImage, migrateBase64ImageToStorage, calculateDistance, geocodeBrazilianAddress, normalizeText } from '../lib/utils';
 import { format, subDays } from 'date-fns';
 import { Link, useSearchParams } from 'react-router-dom';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
@@ -155,6 +155,7 @@ export default function AdminDashboard() {
   // used as autocomplete suggestions when adding a bairro fee, so the
   // admin picks a name that actually matches what customers have, instead
   // of typing a new variant that silently collides/mismatches later.
+  const [neighborhoodSuggestIdx, setNeighborhoodSuggestIdx] = useState<number | null>(null);
   const knownNeighborhoods = useMemo(() => {
     const set = new Set<string>();
     users.forEach(u => { if (u.addressNeighborhood) set.add(String(u.addressNeighborhood).trim()); });
@@ -1896,25 +1897,54 @@ export default function AdminDashboard() {
               </div>
               <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider mb-4">Caso o cliente preencha um bairro listado aqui, a taxa de entrega dele será definida automaticamente com o valor correspondente.</p>
 
-              <datalist id="bairros-conhecidos">
-                {knownNeighborhoods.map(n => <option key={n} value={n} />)}
-              </datalist>
-
               <div className="space-y-2 max-h-60 overflow-y-auto pr-2">
-                {(companyInfo.neighborhoodFees || []).map((nh, idx) => (
+                {(companyInfo.neighborhoodFees || []).map((nh, idx) => {
+                  const suggestions = neighborhoodSuggestIdx === idx
+                    ? (() => {
+                        const q = normalizeText(nh.name || '');
+                        return knownNeighborhoods
+                          .filter(n => !q || normalizeText(n).includes(q))
+                          .slice(0, 8);
+                      })()
+                    : [];
+                  return (
                   <div key={idx} className="flex items-center gap-2 bg-gray-50 p-2 rounded-lg border border-gray-100">
+                    <div className="flex-1 relative">
                     <input
                       type="text"
-                      list="bairros-conhecidos"
                       placeholder="Buscar/digitar nome do bairro"
                       value={nh.name}
+                      onFocus={() => setNeighborhoodSuggestIdx(idx)}
+                      onBlur={() => setTimeout(() => setNeighborhoodSuggestIdx(prev => prev === idx ? null : prev), 150)}
                       onChange={(e) => {
                         const newFees = [...(companyInfo.neighborhoodFees || [])];
                         newFees[idx].name = e.target.value;
                         setCompanyInfo({ ...companyInfo, neighborhoodFees: newFees });
+                        setNeighborhoodSuggestIdx(idx);
                       }}
-                      className="flex-1 bg-white border border-gray-200 rounded py-1.5 px-2 text-[10px] font-bold text-gray-800 focus:ring-brand focus:border-brand"
+                      className="w-full bg-white border border-gray-200 rounded py-1.5 px-2 text-[10px] font-bold text-gray-800 focus:ring-brand focus:border-brand"
                     />
+                    {suggestions.length > 0 && (
+                      <div className="absolute z-20 top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-40 overflow-y-auto">
+                        {suggestions.map(s => (
+                          <button
+                            type="button"
+                            key={s}
+                            onMouseDown={(e) => e.preventDefault()}
+                            onClick={() => {
+                              const newFees = [...(companyInfo.neighborhoodFees || [])];
+                              newFees[idx].name = s;
+                              setCompanyInfo({ ...companyInfo, neighborhoodFees: newFees });
+                              setNeighborhoodSuggestIdx(null);
+                            }}
+                            className="w-full text-left px-3 py-2 text-[10px] font-bold text-gray-700 hover:bg-brand/10 hover:text-brand"
+                          >
+                            {s}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    </div>
                     <div className="flex items-center gap-1 bg-white border border-gray-200 rounded px-2">
                       <span className="text-[10px] font-bold text-gray-500">R$</span>
                       <input
@@ -1949,7 +1979,8 @@ export default function AdminDashboard() {
                       <Trash2 size={14} />
                     </button>
                   </div>
-                ))}
+                  );
+                })}
                 {(!companyInfo.neighborhoodFees || companyInfo.neighborhoodFees.length === 0) && (
                   <div className="text-center py-4 bg-gray-50 rounded-lg border border-dashed border-gray-200">
                     <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Nenhum bairro configurado</p>

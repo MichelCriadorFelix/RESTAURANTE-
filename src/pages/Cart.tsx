@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
-import { formatCurrency, calculateDistance, formatSizeLabel, geocodeBrazilianAddress } from '../lib/utils';
+import { formatCurrency, calculateDistance, formatSizeLabel, geocodeBrazilianAddress, normalizeText } from '../lib/utils';
 import { collection, addDoc, doc, onSnapshot } from 'firebase/firestore';
 import { db, sanitizeForFirestore } from '../lib/firebase';
 import { notifyAdminsOfNewOrder } from '../lib/push';
@@ -65,12 +65,7 @@ export default function Cart() {
     // perto do posto" vs the admin's registered "Vila São João") — an
     // exact-only match was silently falling back to the base delivery
     // fee for any real-world typo/variation instead of the bairro rate.
-    const normalize = (s: string) => s
-      .trim()
-      .toLowerCase()
-      .normalize('NFD')
-      .replace(/[̀-ͯ]/g, '')
-      .replace(/\s+/g, ' ');
+    const normalize = normalizeText;
 
     // The store's registered city is a reliable, non-geocoded signal for
     // "do we deliver here at all" — it comes straight from the CEP lookup

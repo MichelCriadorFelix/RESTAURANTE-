@@ -12,6 +12,19 @@ export function formatCurrency(value: number) {
   }).format(value);
 }
 
+// Case/accent/whitespace-insensitive comparison key, shared by every
+// place that matches a customer-typed or CEP-derived name (bairro, city)
+// against a registered/admin-typed one — keeps the definition in one
+// place instead of each call site drifting slightly from the others.
+export function normalizeText(s: string): string {
+  return s
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/\s+/g, ' ');
+}
+
 export function formatSizeLabel(size?: string): string {
   if (!size) return '';
   if (size === '1 pedaço') return '1 item';
