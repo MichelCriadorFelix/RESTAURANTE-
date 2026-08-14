@@ -910,7 +910,7 @@ export default function AdminDashboard() {
                         {order.deliveryFeePending && (
                           <div className="mt-1 px-2 py-0.5 bg-amber-50 border border-amber-100 text-amber-800 text-[9px] font-bold rounded flex items-center gap-1 uppercase tracking-wider max-w-md">
                             <span className="inline-block w-1 h-1 rounded-full bg-amber-500 animate-pulse"></span>
-                            ⚠️ Definir taxa de entrega
+                            ⚠️ Bairro novo — avaliar entrega
                           </div>
                         )}
                         <p className="text-[9px] text-gray-400 font-bold mt-1 uppercase tracking-wider">
@@ -1087,7 +1087,7 @@ export default function AdminDashboard() {
                             )}
                             {order.deliveryFeePending && (
                               <div className="text-[9px] font-black text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded inline-block uppercase mt-1">
-                                ⚠️ Definir taxa de entrega
+                                ⚠️ Bairro novo — avaliar entrega
                               </div>
                             )}
                           </div>

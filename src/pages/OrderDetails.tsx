@@ -986,7 +986,7 @@ export default function OrderDetails() {
               {order.deliveryFeePending ? (
                 <div className="flex justify-between items-center text-sm">
                   <span className="font-bold text-gray-500">Taxa de Entrega</span>
-                  <span className="font-black text-amber-600">A confirmar</span>
+                  <span className="font-black text-amber-600">Em análise</span>
                 </div>
               ) : order.deliveryFee != null && order.deliveryFee > 0 && (
                 <div className="flex justify-between items-center text-sm">
@@ -1061,28 +1061,28 @@ export default function OrderDetails() {
             </div>
           )}
 
-          {/* Customer-facing notice: delivery fee not yet confirmed */}
+          {/* Customer-facing notice: neighborhood/fee pending admin review */}
           {!isAdmin && order.deliveryFeePending && (
             <div className="mb-6 bg-amber-50 border border-amber-200 rounded-xl p-4 text-amber-900 shadow-sm">
               <h3 className="font-black text-xs text-amber-950 mb-1.5 uppercase tracking-widest flex items-center gap-1.5">
                 <span className="w-2 h-2 bg-amber-600 rounded-full inline-block animate-pulse"></span>
-                Taxa de entrega a confirmar
+                Pedido em análise pelo administrador
               </h3>
               <p className="text-xs font-bold leading-relaxed">
-                Ainda não temos uma taxa de entrega cadastrada para o seu bairro. Vamos confirmar o valor com você por telefone/WhatsApp antes de despachar o pedido.
+                Seu bairro ainda não está na nossa lista de entrega. O administrador vai avaliar se entregamos aí e confirmar o valor da taxa de entrega — vamos avisar você por telefone/WhatsApp antes de despachar o pedido.
               </p>
             </div>
           )}
 
-          {/* Admin: delivery fee pending confirmation */}
+          {/* Admin: neighborhood/fee pending review */}
           {isAdmin && order.serviceType === 'delivery' && order.deliveryFeePending && (
             <div className="mb-6 bg-amber-50 border border-amber-200 rounded-xl p-4 shadow-sm">
               <h3 className="font-black text-amber-950 text-xs uppercase tracking-widest mb-1 flex items-center gap-1.5">
                 <span className="w-2 h-2 bg-amber-600 rounded-full inline-block animate-pulse"></span>
-                Bairro não cadastrado — definir taxa de entrega
+                Bairro novo — avalie se entregamos aí
               </h3>
               <p className="text-amber-800 text-xs font-semibold mb-3 leading-relaxed">
-                O bairro deste cliente não está na lista de taxas cadastradas. Defina o valor da entrega abaixo — o cliente será avisado automaticamente no chat do pedido.
+                O bairro deste cliente não está na lista cadastrada. Confira o endereço abaixo e, se atendermos essa região, defina o valor da taxa de entrega — o cliente será avisado automaticamente no chat do pedido. Se não entregarmos aí, cancele o pedido e avise o cliente pelo chat.
               </p>
               <div className="flex gap-2">
                 <input

@@ -526,14 +526,14 @@ ${window.location.origin}/orders/${orderRef.id}`;
             <span className="font-black text-gray-900">
               {serviceType === 'delivery'
                 ? (user?.addressNeighborhood && !isNeighborhoodExplicitlyAllowed
-                    ? 'A confirmar'
+                    ? 'Em análise'
                     : (calculatedDeliveryFee > 0 ? formatCurrency(calculatedDeliveryFee) : 'Grátis'))
                 : 'Grátis'}
             </span>
           </div>
           {serviceType === 'delivery' && user?.addressNeighborhood && !isNeighborhoodExplicitlyAllowed && (
             <p className="text-[11px] text-amber-800 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2 font-semibold leading-relaxed">
-              Ainda não temos uma taxa de entrega cadastrada para o seu bairro. Vamos confirmar o valor com você por telefone/WhatsApp antes de despachar o pedido.
+              Seu bairro ainda não está na nossa lista de entrega. Seu pedido será avaliado pelo administrador para confirmar se entregamos aí e qual o valor da taxa — vamos avisar você por telefone/WhatsApp antes de despachar.
             </p>
           )}
           {selectedReward && (
