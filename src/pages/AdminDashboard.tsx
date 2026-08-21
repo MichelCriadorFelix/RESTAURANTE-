@@ -90,7 +90,7 @@ const paymentMap = {
   cash: 'Dinheiro na Entrega'
 };
 
-type PeriodType = 'day' | 'week' | 'month' | 'trimester' | 'semester' | 'year';
+type PeriodType = 'yesterday' | 'day' | 'week' | 'month' | 'trimester' | 'semester' | 'year';
 
 const formatRewardLabel = (discountType: 'fixed' | 'percent', discountValue: number) =>
   discountType === 'percent'
@@ -673,19 +673,27 @@ export default function AdminDashboard() {
   }), [allOrders, searchQuery, filterStatus, filterPayment, historyPeriod]);
 
   // --- Calculations for Tab 3: CRM ---
-  const getCrmPeriodMs = (period: PeriodType): number => {
+  // Returns a bounded range rather than just a start — "yesterday" needs
+  // an end boundary too (start of today), unlike every other period which
+  // is open-ended up to now.
+  const getCrmPeriodRange = (period: PeriodType): { start: number; end: number } => {
     const now = new Date();
+    if (period === 'yesterday') {
+      const startOfToday = new Date();
+      startOfToday.setHours(0, 0, 0, 0);
+      return { start: subDays(startOfToday, 1).getTime(), end: startOfToday.getTime() };
+    }
     if (period === 'day') {
       const start = new Date();
-      start.setHours(0,0,0,0);
-      return start.getTime();
+      start.setHours(0, 0, 0, 0);
+      return { start: start.getTime(), end: now.getTime() };
     }
-    if (period === 'week') return subDays(now, 7).getTime();
-    if (period === 'month') return subDays(now, 30).getTime();
-    if (period === 'trimester') return subDays(now, 90).getTime();
-    if (period === 'semester') return subDays(now, 180).getTime();
-    if (period === 'year') return subDays(now, 365).getTime();
-    return 0;
+    if (period === 'week') return { start: subDays(now, 7).getTime(), end: now.getTime() };
+    if (period === 'month') return { start: subDays(now, 30).getTime(), end: now.getTime() };
+    if (period === 'trimester') return { start: subDays(now, 90).getTime(), end: now.getTime() };
+    if (period === 'semester') return { start: subDays(now, 180).getTime(), end: now.getTime() };
+    if (period === 'year') return { start: subDays(now, 365).getTime(), end: now.getTime() };
+    return { start: 0, end: now.getTime() };
   };
 
   const {
@@ -700,23 +708,44 @@ export default function AdminDashboard() {
     crmNetProfit,
     topCrmProducts,
     maxProductQuantity,
-    paymentBreakdown
+    paymentBreakdown,
+    dailyRevenueBreakdown
   } = useMemo(() => {
-    const startMs = getCrmPeriodMs(crmPeriod);
-    const crmOrders = allOrders.filter(o => o.createdAt >= startMs);
+    const { start: startMs, end: endMs } = getCrmPeriodRange(crmPeriod);
+    const crmOrders = allOrders.filter(o => o.createdAt >= startMs && o.createdAt < endMs);
     const crmCompletedOrders = crmOrders.filter(o => o.status === 'completed');
     const crmCancelledOrders = crmOrders.filter(o => o.status === 'cancelled');
 
     const revenue = crmCompletedOrders.reduce((sum, o) => sum + o.total, 0);
     const completedCount = crmCompletedOrders.length;
     const averageTicket = completedCount > 0 ? revenue / completedCount : 0;
-    
+
     // Finances
-    const crmFinances = finances.filter(f => f.date >= startMs);
+    const crmFinances = finances.filter(f => f.date >= startMs && f.date < endMs);
     const fixedCosts = crmFinances.filter(f => f.type === 'fixed_cost').reduce((sum, f) => sum + f.amount, 0);
     const varCosts = crmFinances.filter(f => f.type === 'variable_cost').reduce((sum, f) => sum + f.amount, 0);
     const totalCosts = fixedCosts + varCosts;
     const netProfit = revenue - totalCosts;
+
+    // Day-by-day revenue breakdown, only meaningful for the 7/30-day
+    // windows — a per-day bar for a semester/year would be unreadable.
+    // Days with zero orders still get a bucket so gaps are visible rather
+    // than silently skipped.
+    let dailyBreakdown: { label: string; Faturamento: number }[] = [];
+    if (crmPeriod === 'week' || crmPeriod === 'month') {
+      const days = crmPeriod === 'week' ? 7 : 30;
+      const now = new Date();
+      const buckets = Array.from({ length: days }, (_, idx) => {
+        const d = subDays(now, days - 1 - idx);
+        return { key: format(d, 'yyyy-MM-dd'), label: format(d, 'dd/MM'), Faturamento: 0 };
+      });
+      const byKey = Object.fromEntries(buckets.map(b => [b.key, b]));
+      crmCompletedOrders.forEach(o => {
+        const key = format(new Date(o.createdAt), 'yyyy-MM-dd');
+        if (byKey[key]) byKey[key].Faturamento += o.total;
+      });
+      dailyBreakdown = buckets.map(({ label, Faturamento }) => ({ label, Faturamento }));
+    }
 
     // Top Products
     const productQuantities: { [key: string]: { name: string; quantity: number; revenue: number } } = {};
@@ -758,7 +787,8 @@ export default function AdminDashboard() {
       crmNetProfit: netProfit,
       topCrmProducts: topProducts,
       maxProductQuantity: maxQty,
-      paymentBreakdown: pBreakdown
+      paymentBreakdown: pBreakdown,
+      dailyRevenueBreakdown: dailyBreakdown
     };
   }, [allOrders, finances, crmPeriod]);
 
@@ -1240,6 +1270,7 @@ export default function AdminDashboard() {
             </div>
             <div className="flex flex-wrap gap-1">
               {[
+                { id: 'yesterday', label: 'Ontem' },
                 { id: 'day', label: 'Hoje' },
                 { id: 'week', label: '7 Dias' },
                 { id: 'month', label: '30 Dias' },
@@ -1350,6 +1381,30 @@ export default function AdminDashboard() {
               )}
             </div>
           </div>
+
+          {/* Day-by-day revenue — only meaningful for the 7/30-day windows */}
+          {dailyRevenueBreakdown.length > 0 && (
+            <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm">
+              <h4 className="text-xs font-black text-gray-900 uppercase tracking-widest mb-4">Faturamento por Dia</h4>
+              <div className="h-64">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={dailyRevenueBreakdown}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                    <XAxis
+                      dataKey="label"
+                      stroke="#9ca3af"
+                      fontSize={9}
+                      fontWeight="bold"
+                      interval={crmPeriod === 'month' ? 3 : 0}
+                    />
+                    <YAxis stroke="#9ca3af" fontSize={10} />
+                    <Tooltip formatter={(value: number) => formatCurrency(value)} />
+                    <Bar dataKey="Faturamento" fill="#10b981" radius={[4, 4, 0, 0]} maxBarSize={40} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          )}
 
           {/* Payment Methods Breakdowns */}
           <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm">
