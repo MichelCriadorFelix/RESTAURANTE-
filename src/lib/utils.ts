@@ -1,8 +1,69 @@
 import { type ClassValue, clsx } from "clsx"
 import { twMerge } from "tailwind-merge"
+import { BillingInfo } from "../types"
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
+}
+
+// The two developer accounts that own billing/pause enforcement for this
+// client's app — hardcoded rather than a Firestore-editable role, because
+// the whole point is that the paying client (an admin) cannot grant this
+// power to themselves or anyone else.
+export const BILLING_ADMIN_EMAILS = ['michelgeminicriador@gmail.com', 'rafaelvitorsantos08@gmail.com'];
+
+export function isBillingAdminEmail(email?: string | null): boolean {
+  return !!email && BILLING_ADMIN_EMAILS.includes(email);
+}
+
+export interface BillingPauseState {
+  paused: boolean;
+  reason: 'launch_fee_overdue' | 'monthly_overdue' | null;
+  deadline: number | null;
+}
+
+// Pause is always derived from stored timestamps, never a manually
+// toggled flag — "unpausing" just means a developer confirms payment,
+// which moves launchFeePaid/nextDueDate, which changes this result. No
+// separate on/off switch exists to get out of sync with actual payment
+// status.
+export function getBillingPauseState(billing: BillingInfo | null | undefined): BillingPauseState {
+  if (!billing) return { paused: false, reason: null, deadline: null };
+  const now = Date.now();
+
+  if (!billing.launchFeePaid) {
+    const deadline = billing.launchFeeDeadline ?? null;
+    const overdue = !!deadline && now > deadline;
+    return { paused: overdue, reason: overdue ? 'launch_fee_overdue' : null, deadline };
+  }
+
+  if (billing.nextDueDate) {
+    const graceDeadline = billing.nextDueDate + 48 * 60 * 60 * 1000;
+    if (now > graceDeadline) {
+      return { paused: true, reason: 'monthly_overdue', deadline: graceDeadline };
+    }
+    // Past the due date but still inside the 48h grace window — not
+    // paused yet, but the deadline that matters now is the pause
+    // deadline, not the due date itself (which has already passed).
+    if (now > billing.nextDueDate) {
+      return { paused: false, reason: null, deadline: graceDeadline };
+    }
+    return { paused: false, reason: null, deadline: billing.nextDueDate };
+  }
+
+  return { paused: false, reason: null, deadline: null };
+}
+
+export function formatCountdown(deadline: number): string {
+  const ms = deadline - Date.now();
+  if (ms <= 0) return 'Prazo esgotado';
+  const totalMinutes = Math.floor(ms / 60000);
+  const days = Math.floor(totalMinutes / (60 * 24));
+  const hours = Math.floor((totalMinutes % (60 * 24)) / 60);
+  const minutes = totalMinutes % 60;
+  if (days > 0) return `${days}d ${hours}h ${minutes}min`;
+  if (hours > 0) return `${hours}h ${minutes}min`;
+  return `${minutes}min`;
 }
 
 export function formatCurrency(value: number) {

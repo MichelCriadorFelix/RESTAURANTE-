@@ -24,11 +24,44 @@ service cloud.firestore {
       return email == 'michelgeminicriador@gmail.com' || email == 'felixcastroadv@gmail.com';
     }
 
+    // The two developer accounts that own billing/pause enforcement for
+    // this client's app. Their admin role can never be revoked (see the
+    // `users/{userId}` update rule), and only they can confirm a payment
+    // (settings/billing) or resolve a billing proof — the paying client is
+    // an admin themselves and must not be able to grant this to themselves.
+    function isBillingAdminEmail(email) {
+      return email == 'michelgeminicriador@gmail.com' || email == 'rafaelvitorsantos08@gmail.com';
+    }
+
     // Company-wide settings (name, hours, logo). Everyone can read;
-    // only admins can change it.
+    // only admins can change it — except settingId == 'billing', which is
+    // carved out below and excluded here so that more specific rule
+    // doesn't get OR'd open by this general one.
     match /settings/{settingId} {
       allow read: if true;
-      allow write: if isAdmin();
+      allow write: if isAdmin() && settingId != 'billing';
+    }
+
+    // Billing/pause state. Anyone can read it (needed for the customer-
+    // facing pause gate) and any admin can create the doc once (bootstrap,
+    // harmless either way). Every update after that requires a
+    // billing-admin account, so the paying client can never mark their own
+    // payment as received or push their due date out.
+    match /settings/billing {
+      allow read: if true;
+      allow create: if isAdmin();
+      allow update: if isSignedIn() && isBillingAdminEmail(request.auth.token.email);
+    }
+
+    // Payment proof submissions. Any admin can attach a proof for
+    // themselves; only a billing admin (or the original sender, so the
+    // client can see her own submission's status) can read the collection,
+    // and only a billing admin can mark one confirmed/edit it.
+    match /billingProofs/{proofId} {
+      allow read: if isAdmin() &&
+        (isOwner(resource.data.senderId) || isBillingAdminEmail(request.auth.token.email));
+      allow create: if isAdmin() && request.resource.data.senderId == request.auth.uid;
+      allow update, delete: if isSignedIn() && isBillingAdminEmail(request.auth.token.email);
     }
 
     // Menu items. Prices/availability must never be writable by customers.
@@ -49,10 +82,11 @@ service cloud.firestore {
       allow create: if isOwner(userId) &&
         (request.resource.data.role == 'user' ||
          (request.resource.data.role == 'admin' && isBootstrapOwnerEmail(request.resource.data.email)));
-      allow update: if (isOwner(userId) &&
+      allow update: if ((isOwner(userId) &&
          (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'points']) ||
-          (request.resource.data.role == 'admin' && isBootstrapOwnerEmail(request.resource.data.email)))) || isAdmin();
-      allow delete: if isAdmin();
+          (request.resource.data.role == 'admin' && isBootstrapOwnerEmail(request.resource.data.email)))) || isAdmin()) &&
+        !(isBillingAdminEmail(resource.data.email) && request.resource.data.role != 'admin');
+      allow delete: if isAdmin() && !isBillingAdminEmail(resource.data.email);
     }
 
     // Orders. Customers can only create orders for themselves and can only
