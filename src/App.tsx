@@ -7,6 +7,7 @@ import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { CartProvider } from './context/CartContext';
+import { useAutoUpdate } from './hooks/useAutoUpdate';
 import Layout from './components/Layout';
 import Login from './pages/Login';
 import Home from './pages/Home';
@@ -36,6 +37,8 @@ const ProtectedRoute = ({ children, adminOnly = false }: { children: React.React
 };
 
 export default function App() {
+  useAutoUpdate();
+
   return (
     <AuthProvider>
       <CartProvider>

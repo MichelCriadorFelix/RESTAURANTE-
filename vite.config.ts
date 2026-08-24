@@ -4,11 +4,31 @@ import path from 'path';
 import { defineConfig } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
 
+// Unique per build. Baked into the JS bundle (__APP_BUILD_ID__) and also
+// written to dist/version.json, so a running app can fetch version.json
+// (network-only, never cached by the service worker) and detect that a
+// newer deploy exists even if its own stale service worker/precache is
+// still serving the old shell — see src/hooks/useAutoUpdate.ts.
+const buildId = Date.now().toString();
+
+function versionFilePlugin() {
+  return {
+    name: 'write-version-file',
+    generateBundle() {
+      this.emitFile({ type: 'asset', fileName: 'version.json', source: JSON.stringify({ buildId }) });
+    },
+  };
+}
+
 export default defineConfig(() => {
   return {
+    define: {
+      __APP_BUILD_ID__: JSON.stringify(buildId),
+    },
     plugins: [
       react(),
       tailwindcss(),
+      versionFilePlugin(),
       VitePWA({
         registerType: 'autoUpdate',
         injectRegister: 'auto',
