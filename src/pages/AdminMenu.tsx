@@ -3,7 +3,7 @@ import { collection, query, onSnapshot, doc, updateDoc, deleteDoc, setDoc, addDo
 import { db, sanitizeForFirestore, handleFirestoreError, OperationType } from '../lib/firebase';
 import { Product } from '../types';
 import { formatCurrency, compressAndUploadImage, migrateBase64ImageToStorage } from '../lib/utils';
-import { Edit, Trash2, Plus, X, Check, AlertTriangle, AlertCircle, Search, Image as ImageIcon, UploadCloud, ChevronUp, ChevronDown } from 'lucide-react';
+import { Edit, Trash2, Plus, X, Check, AlertTriangle, AlertCircle, Search, Image as ImageIcon, UploadCloud, ChevronUp, ChevronDown, PackageX } from 'lucide-react';
 import { useRef } from 'react';
 import { initialMenu } from '../lib/seedData';
 import { AnimatePresence, motion } from 'framer-motion';
@@ -499,8 +499,10 @@ export default function AdminMenu() {
                         
                         {step.options.length > 0 ? (
                           <div className="space-y-2">
-                            {step.options.map((option, optionIndex) => (
-                              <div key={option.id || optionIndex} className="flex gap-2 items-start group/option">
+                            {step.options.map((option, optionIndex) => {
+                              const isOutOfStock = option.available === false;
+                              return (
+                              <div key={option.id || optionIndex} className={`flex gap-2 items-start group/option ${isOutOfStock ? 'opacity-60' : ''}`}>
                                 <div className="flex flex-col gap-0.5 mt-0.5">
                                   <button type="button" onClick={() => handleMoveOption(stepIndex, optionIndex, 'up')} disabled={optionIndex === 0} className="text-gray-400 hover:text-brand disabled:opacity-30 p-0.5" title="Mover para cima">
                                     <ChevronUp size={14} />
@@ -510,16 +512,25 @@ export default function AdminMenu() {
                                   </button>
                                 </div>
                                 <div className="flex-1">
-                                  <input type="text" required value={option.name} onChange={e => handleUpdateOptionInStep(stepIndex, optionIndex, 'name', e.target.value)} placeholder="Nome da opção" className="w-full px-2 py-1 border border-gray-200 rounded-md text-xs focus:outline-none focus:ring-1 focus:ring-brand" />
+                                  <input type="text" required value={option.name} onChange={e => handleUpdateOptionInStep(stepIndex, optionIndex, 'name', e.target.value)} placeholder="Nome da opção" className={`w-full px-2 py-1 border rounded-md text-xs focus:outline-none focus:ring-1 focus:ring-brand ${isOutOfStock ? 'border-red-200 bg-red-50 line-through text-gray-500' : 'border-gray-200'}`} />
                                 </div>
                                 <div className="w-24">
                                   <input type="number" step="0.01" value={option.price !== undefined ? option.price : ''} onChange={e => handleUpdateOptionInStep(stepIndex, optionIndex, 'price', e.target.value ? parseFloat(e.target.value) : undefined)} placeholder="R$ +0,00" className="w-full px-2 py-1 border border-gray-200 rounded-md text-xs focus:outline-none focus:ring-1 focus:ring-brand" />
                                 </div>
+                                <button
+                                  type="button"
+                                  onClick={() => handleUpdateOptionInStep(stepIndex, optionIndex, 'available', isOutOfStock ? true : false)}
+                                  className={`p-1.5 rounded-md mt-0.5 ${isOutOfStock ? 'text-red-600 bg-red-100 hover:bg-red-200' : 'text-gray-400 hover:text-red-500 hover:bg-red-50'}`}
+                                  title={isOutOfStock ? 'Marcar como disponível' : 'Marcar como em falta'}
+                                >
+                                  <PackageX size={12} />
+                                </button>
                                 <button type="button" onClick={() => handleRemoveOptionFromStep(stepIndex, optionIndex)} className="p-1.5 text-red-500 hover:bg-red-50 rounded-md mt-0.5">
                                   <Trash2 size={12} />
                                 </button>
                               </div>
-                            ))}
+                              );
+                            })}
                           </div>
                         ) : (
                           <div className="text-[10px] text-gray-400 text-center py-2 italic">Nenhuma opção adicionada.</div>

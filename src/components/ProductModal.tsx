@@ -226,9 +226,10 @@ export function ProductModal({ product, onClose, editItemIndex, existingItem }: 
                 
                 <div className="grid grid-cols-2 gap-2 mt-3">
                   {step.options.map((opt, oIdx) => {
-                    const isSelected = currentSelections.some(s => s.name === opt.name);
-                    const isDisabled = !isSelected && step.max !== 999 && currentSelections.length >= step.max && !isRadio;
-                    
+                    const isOutOfStock = opt.available === false;
+                    const isSelected = !isOutOfStock && currentSelections.some(s => s.name === opt.name);
+                    const isDisabled = isOutOfStock || (!isSelected && step.max !== 999 && currentSelections.length >= step.max && !isRadio);
+
                     return (
                       <label
                         key={opt.id || oIdx}
@@ -243,27 +244,29 @@ export function ProductModal({ product, onClose, editItemIndex, existingItem }: 
                       >
                         <div className="flex items-center gap-3">
                           {isRadio ? (
-                            <input 
-                              type="radio" 
-                              checked={isSelected} 
-                              onChange={() => !isDisabled && handleToggleOption(step.title, opt, true, step.max)} 
-                              className="text-brand focus:ring-brand w-4 h-4 cursor-pointer disabled:cursor-not-allowed" 
+                            <input
+                              type="radio"
+                              checked={isSelected}
+                              onChange={() => !isDisabled && handleToggleOption(step.title, opt, true, step.max)}
+                              className="text-brand focus:ring-brand w-4 h-4 cursor-pointer disabled:cursor-not-allowed"
                               disabled={isDisabled}
                             />
                           ) : (
-                            <input 
-                              type="checkbox" 
-                              checked={isSelected} 
-                              onChange={() => !isDisabled && handleToggleOption(step.title, opt, false, step.max)} 
-                              className="text-brand focus:ring-brand w-4 h-4 rounded cursor-pointer disabled:cursor-not-allowed" 
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={() => !isDisabled && handleToggleOption(step.title, opt, false, step.max)}
+                              className="text-brand focus:ring-brand w-4 h-4 rounded cursor-pointer disabled:cursor-not-allowed"
                               disabled={isDisabled}
                             />
                           )}
-                          <span className="text-xs font-bold text-gray-800">{opt.name}</span>
+                          <span className={`text-xs font-bold ${isOutOfStock ? 'text-gray-400 line-through' : 'text-gray-800'}`}>{opt.name}</span>
                         </div>
-                        {opt.price && (
+                        {isOutOfStock ? (
+                          <span className="text-[10px] font-black text-red-500 uppercase tracking-widest">Em falta</span>
+                        ) : opt.price ? (
                           <span className="text-[10px] font-black text-gray-500">+{formatCurrency(opt.price)}</span>
-                        )}
+                        ) : null}
                       </label>
                     );
                   })}

@@ -36,6 +36,7 @@ export interface StepOption {
   id?: string;
   name: string;
   price?: number;
+  available?: boolean; // false = "em falta", hidden from selection for customers
 }
 
 export interface CustomizationStep {
