@@ -502,36 +502,28 @@ export default function AdminMenu() {
                             {step.options.map((option, optionIndex) => {
                               const isOutOfStock = option.available === false;
                               return (
-                              <div key={option.id || optionIndex} className={`flex flex-col sm:flex-row gap-2 sm:items-start group/option ${isOutOfStock ? 'opacity-60' : ''}`}>
-                                <div className="flex items-start gap-2 sm:flex-1 min-w-0">
-                                  <div className="flex flex-col gap-0.5 mt-0.5 shrink-0">
-                                    <button type="button" onClick={() => handleMoveOption(stepIndex, optionIndex, 'up')} disabled={optionIndex === 0} className="text-gray-400 hover:text-brand disabled:opacity-30 p-0.5" title="Mover para cima">
-                                      <ChevronUp size={14} />
-                                    </button>
-                                    <button type="button" onClick={() => handleMoveOption(stepIndex, optionIndex, 'down')} disabled={optionIndex === step.options.length - 1} className="text-gray-400 hover:text-brand disabled:opacity-30 p-0.5" title="Mover para baixo">
-                                      <ChevronDown size={14} />
-                                    </button>
-                                  </div>
-                                  <div className="flex-1 min-w-0">
-                                    <input type="text" required value={option.name} onChange={e => handleUpdateOptionInStep(stepIndex, optionIndex, 'name', e.target.value)} placeholder="Nome da opção" className={`w-full px-2 py-1 border rounded-md text-xs focus:outline-none focus:ring-1 focus:ring-brand ${isOutOfStock ? 'border-red-200 bg-red-50 line-through text-gray-500' : 'border-gray-200'}`} />
-                                  </div>
-                                </div>
-                                <div className="flex items-center gap-2 pl-6 sm:pl-0 shrink-0">
-                                  <div className="w-24">
-                                    <input type="number" step="0.01" value={option.price !== undefined ? option.price : ''} onChange={e => handleUpdateOptionInStep(stepIndex, optionIndex, 'price', e.target.value ? parseFloat(e.target.value) : undefined)} placeholder="R$ +0,00" className="w-full px-2 py-1 border border-gray-200 rounded-md text-xs focus:outline-none focus:ring-1 focus:ring-brand" />
-                                  </div>
-                                  <button
-                                    type="button"
-                                    onClick={() => handleUpdateOptionInStep(stepIndex, optionIndex, 'available', isOutOfStock ? true : false)}
-                                    className={`p-1.5 rounded-md ${isOutOfStock ? 'text-red-600 bg-red-100 hover:bg-red-200' : 'text-gray-400 hover:text-red-500 hover:bg-red-50'}`}
-                                    title={isOutOfStock ? 'Marcar como disponível' : 'Marcar como em falta'}
-                                  >
-                                    <PackageX size={12} />
+                              <div key={option.id || optionIndex} className={`flex gap-1 items-center group/option ${isOutOfStock ? 'opacity-60' : ''}`}>
+                                <div className="flex flex-col gap-0 shrink-0">
+                                  <button type="button" onClick={() => handleMoveOption(stepIndex, optionIndex, 'up')} disabled={optionIndex === 0} className="text-gray-400 hover:text-brand disabled:opacity-30 p-0" title="Mover para cima">
+                                    <ChevronUp size={12} />
                                   </button>
-                                  <button type="button" onClick={() => handleRemoveOptionFromStep(stepIndex, optionIndex)} className="p-1.5 text-red-500 hover:bg-red-50 rounded-md">
-                                    <Trash2 size={12} />
+                                  <button type="button" onClick={() => handleMoveOption(stepIndex, optionIndex, 'down')} disabled={optionIndex === step.options.length - 1} className="text-gray-400 hover:text-brand disabled:opacity-30 p-0" title="Mover para baixo">
+                                    <ChevronDown size={12} />
                                   </button>
                                 </div>
+                                <input type="text" required value={option.name} onChange={e => handleUpdateOptionInStep(stepIndex, optionIndex, 'name', e.target.value)} placeholder="Nome" className={`flex-1 min-w-0 px-1.5 py-1 border rounded-md text-xs focus:outline-none focus:ring-1 focus:ring-brand ${isOutOfStock ? 'border-red-200 bg-red-50 line-through text-gray-500' : 'border-gray-200'}`} />
+                                <input type="number" step="0.01" value={option.price !== undefined ? option.price : ''} onChange={e => handleUpdateOptionInStep(stepIndex, optionIndex, 'price', e.target.value ? parseFloat(e.target.value) : undefined)} placeholder="R$" className="w-12 shrink-0 px-1 py-1 border border-gray-200 rounded-md text-[10px] focus:outline-none focus:ring-1 focus:ring-brand" />
+                                <button
+                                  type="button"
+                                  onClick={() => handleUpdateOptionInStep(stepIndex, optionIndex, 'available', isOutOfStock ? true : false)}
+                                  className={`p-1 rounded-md shrink-0 ${isOutOfStock ? 'text-red-600 bg-red-100 hover:bg-red-200' : 'text-gray-400 hover:text-red-500 hover:bg-red-50'}`}
+                                  title={isOutOfStock ? 'Marcar como disponível' : 'Marcar como em falta'}
+                                >
+                                  <PackageX size={12} />
+                                </button>
+                                <button type="button" onClick={() => handleRemoveOptionFromStep(stepIndex, optionIndex)} className="p-1 shrink-0 text-red-500 hover:bg-red-50 rounded-md">
+                                  <Trash2 size={12} />
+                                </button>
                               </div>
                               );
                             })}
