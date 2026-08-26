@@ -577,6 +577,7 @@ export default function OrderDetails() {
           <div class="section" style="text-align: center;">
             <div class="label">Cliente:</div>
             <div>${escapeHtml(order.userName)}</div>
+            ${order.userPhone ? `<div>${escapeHtml(order.userPhone)}</div>` : ''}
           </div>
 
           <div class="section" style="text-align: center;">
