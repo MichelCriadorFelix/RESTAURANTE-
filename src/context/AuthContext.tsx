@@ -1,7 +1,8 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { User } from '../types';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
-import { db, auth } from '../lib/firebase';
+import { doc, getDoc, setDoc, getFirestore } from 'firebase/firestore';
+import { initializeApp, deleteApp } from 'firebase/app';
+import { db, auth, firebaseConfig } from '../lib/firebase';
 import {
   signInWithPopup,
   GoogleAuthProvider,
@@ -9,6 +10,7 @@ import {
   onAuthStateChanged,
   setPersistence,
   browserLocalPersistence,
+  getAuth,
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
   updateProfile,
@@ -148,13 +150,22 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const registerWithPhone = async (name: string, phone: string, pass: string) => {
     setLoading(true);
+    const digits = normalizePhoneDigits(phone);
+    if (digits.length < 10) {
+      setLoading(false);
+      throw new Error('Informe um telefone válido com DDD.');
+    }
+
+    // Runs on an isolated secondary Firebase app instance so creating this
+    // account never touches the primary `auth` session. If it did, the
+    // global onAuthStateChanged listener would briefly log this browser in
+    // as the brand-new account, which would skip past the "conta criada,
+    // agora faça login" confirmation screen the owner asked for.
+    const secondaryApp = initializeApp(firebaseConfig, `phone-register-${Date.now()}`);
     try {
-      const digits = normalizePhoneDigits(phone);
-      if (digits.length < 10) {
-        throw new Error('Informe um telefone válido com DDD.');
-      }
-      await setPersistence(auth, browserLocalPersistence);
-      const cred = await createUserWithEmailAndPassword(auth, phoneToPseudoEmail(digits), pass);
+      const secondaryAuth = getAuth(secondaryApp);
+      const secondaryDb = getFirestore(secondaryApp, firebaseConfig.firestoreDatabaseId);
+      const cred = await createUserWithEmailAndPassword(secondaryAuth, phoneToPseudoEmail(digits), pass);
       await updateProfile(cred.user, { displayName: name });
 
       const userData: User = {
@@ -165,8 +176,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         role: 'user',
         createdAt: Date.now()
       };
-      await setDoc(doc(db, 'users', cred.user.uid), userData);
-      setUser({ ...userData, emailVerified: true });
+      await setDoc(doc(secondaryDb, 'users', cred.user.uid), userData);
+      await signOut(secondaryAuth);
     } catch (err: any) {
       if (err.code === 'auth/email-already-in-use') {
         throw new Error('Já existe uma conta com esse número de telefone. Tente entrar em vez de criar uma nova conta.');
@@ -176,6 +187,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       }
       throw err;
     } finally {
+      await deleteApp(secondaryApp).catch(() => {});
       setLoading(false);
     }
   };

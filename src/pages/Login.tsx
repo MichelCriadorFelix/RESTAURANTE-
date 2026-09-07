@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { Loader2, AlertCircle, UtensilsCrossed, ShieldCheck, Sparkles, User as UserIcon, Phone, Lock, ArrowLeft } from 'lucide-react';
+import { Loader2, AlertCircle, UtensilsCrossed, ShieldCheck, Sparkles, User as UserIcon, Phone, Lock, ArrowLeft, CheckCircle2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { db } from '../lib/firebase';
@@ -40,7 +40,7 @@ function GoogleIcon({ className = "w-6 h-6" }: { className?: string }) {
   );
 }
 
-type LoginMode = 'choice' | 'phone-login' | 'phone-register';
+type LoginMode = 'choice' | 'phone-login' | 'phone-register' | 'phone-register-success';
 
 export default function Login() {
   const { loginWithGoogle, loginWithPhone, registerWithPhone, user } = useAuth();
@@ -133,6 +133,10 @@ export default function Login() {
     try {
       if (mode === 'phone-register') {
         await registerWithPhone(name.trim(), phone, password);
+        setName('');
+        setPassword('');
+        setConfirmPassword('');
+        setMode('phone-register-success');
       } else {
         await loginWithPhone(phone, password);
       }
@@ -187,14 +191,16 @@ export default function Login() {
           </div>
 
           <h2 className="text-xl font-black text-gray-900 uppercase tracking-tight mb-2">
-            {mode === 'choice' ? 'Entrar no Sistema' : mode === 'phone-register' ? 'Criar Conta' : 'Entrar com Nome e Senha'}
+            {mode === 'choice' && 'Entrar no Sistema'}
+            {mode === 'phone-register' && 'Criar Conta'}
+            {mode === 'phone-login' && 'Entrar com Telefone e Senha'}
+            {mode === 'phone-register-success' && 'Conta Criada!'}
           </h2>
           <p className="text-xs text-gray-500 mb-8 leading-relaxed">
-            {mode === 'choice'
-              ? 'Escolha como deseja acessar o cardápio e fazer seus pedidos.'
-              : mode === 'phone-register'
-              ? 'Só na primeira vez. Depois disso, seu acesso fica salvo neste aparelho.'
-              : 'Entre com o telefone e a senha que você cadastrou.'}
+            {mode === 'choice' && 'Escolha como deseja acessar o cardápio e fazer seus pedidos.'}
+            {mode === 'phone-register' && 'Só na primeira vez. Depois disso, seu acesso fica salvo neste aparelho.'}
+            {mode === 'phone-login' && 'Entre com o telefone e a senha que você cadastrou.'}
+            {mode === 'phone-register-success' && 'Agora é só entrar com o telefone e a senha que você acabou de cadastrar.'}
           </p>
 
           {error && (
@@ -206,6 +212,15 @@ export default function Login() {
               <AlertCircle size={18} className="shrink-0 mt-0.5" />
               <div>
                 <p>{error}</p>
+                {mode === 'phone-login' && (
+                  <button
+                    type="button"
+                    onClick={() => switchMode('phone-register')}
+                    className="mt-2 text-brand underline underline-offset-2"
+                  >
+                    Ainda não tem conta? Criar uma agora
+                  </button>
+                )}
               </div>
             </motion.div>
           )}
@@ -246,8 +261,24 @@ export default function Login() {
                 >
                   <UserIcon size={20} className="shrink-0" />
                   <span className="uppercase tracking-wider text-xs font-black">
-                    Entrar com Nome e Senha
+                    Entrar com Telefone e Senha
                   </span>
+                </button>
+              </motion.div>
+            ) : mode === 'phone-register-success' ? (
+              <motion.div key="success" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }} className="space-y-5">
+                <div className="w-16 h-16 bg-emerald-50 text-emerald-500 rounded-full flex items-center justify-center mx-auto">
+                  <CheckCircle2 size={32} />
+                </div>
+                <p className="text-sm font-black text-gray-800">
+                  Parabéns, sua conta foi criada com sucesso!
+                </p>
+                <button
+                  type="button"
+                  onClick={() => switchMode('phone-login')}
+                  className="w-full bg-brand text-white py-4 px-6 rounded-2xl font-black text-sm uppercase tracking-wider transition-all shadow-md hover:shadow-xl active:scale-[0.98]"
+                >
+                  Ir para o Login
                 </button>
               </motion.div>
             ) : (
@@ -261,6 +292,7 @@ export default function Login() {
                     <UserIcon size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
                     <input
                       type="text"
+                      autoComplete="name"
                       value={name}
                       onChange={e => setName(e.target.value)}
                       placeholder="Seu nome completo"
@@ -274,6 +306,7 @@ export default function Login() {
                   <input
                     type="tel"
                     inputMode="numeric"
+                    autoComplete="tel"
                     value={phone}
                     onChange={e => setPhone(formatPhoneMask(e.target.value))}
                     placeholder="(21) 99999-9999"
@@ -285,6 +318,7 @@ export default function Login() {
                   <Lock size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
                   <input
                     type="password"
+                    autoComplete={mode === 'phone-register' ? 'new-password' : 'current-password'}
                     value={password}
                     onChange={e => setPassword(e.target.value)}
                     placeholder="Senha"
@@ -297,6 +331,7 @@ export default function Login() {
                     <Lock size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
                     <input
                       type="password"
+                      autoComplete="new-password"
                       value={confirmPassword}
                       onChange={e => setConfirmPassword(e.target.value)}
                       placeholder="Confirmar senha"
