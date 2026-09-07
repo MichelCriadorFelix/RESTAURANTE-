@@ -1,10 +1,21 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { Loader2, AlertCircle, UtensilsCrossed, ShieldCheck, Sparkles } from 'lucide-react';
-import { motion } from 'framer-motion';
+import { Loader2, AlertCircle, UtensilsCrossed, ShieldCheck, Sparkles, User as UserIcon, Phone, Lock, ArrowLeft } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { db } from '../lib/firebase';
+
+function formatPhoneMask(rawValue: string) {
+  const digits = rawValue.replace(/\D/g, '').slice(0, 11);
+  let formatted = '';
+  if (digits.length > 0) {
+    formatted = `(${digits.slice(0, 2)}`;
+    if (digits.length > 2) formatted += `) ${digits.slice(2, 7)}`;
+    if (digits.length > 7) formatted += `-${digits.slice(7, 11)}`;
+  }
+  return formatted;
+}
 
 function GoogleIcon({ className = "w-6 h-6" }: { className?: string }) {
   return (
@@ -29,12 +40,20 @@ function GoogleIcon({ className = "w-6 h-6" }: { className?: string }) {
   );
 }
 
+type LoginMode = 'choice' | 'phone-login' | 'phone-register';
+
 export default function Login() {
-  const { loginWithGoogle, user } = useAuth();
+  const { loginWithGoogle, loginWithPhone, registerWithPhone, user } = useAuth();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [logoError, setLogoError] = useState(false);
   const navigate = useNavigate();
+
+  const [mode, setMode] = useState<LoginMode>('choice');
+  const [name, setName] = useState('');
+  const [phone, setPhone] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
 
   const [companyInfo, setCompanyInfo] = useState<{ name: string; logoUrl?: string }>({
     name: "SENSAÇÃO GOUMERT"
@@ -89,6 +108,42 @@ export default function Login() {
     }
   };
 
+  const switchMode = (next: LoginMode) => {
+    setError(null);
+    setPassword('');
+    setConfirmPassword('');
+    setMode(next);
+  };
+
+  const handlePhoneSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+
+    if (mode === 'phone-register') {
+      if (!name.trim()) return setError('Informe seu nome.');
+      if (phone.replace(/\D/g, '').length < 10) return setError('Informe um telefone válido com DDD.');
+      if (password.length < 6) return setError('A senha precisa ter pelo menos 6 caracteres.');
+      if (password !== confirmPassword) return setError('As senhas não coincidem.');
+    } else {
+      if (phone.replace(/\D/g, '').length < 10) return setError('Informe um telefone válido com DDD.');
+      if (!password) return setError('Informe sua senha.');
+    }
+
+    setLoading(true);
+    try {
+      if (mode === 'phone-register') {
+        await registerWithPhone(name.trim(), phone, password);
+      } else {
+        await loginWithPhone(phone, password);
+      }
+    } catch (err: any) {
+      console.error(err);
+      setError(err.message || 'Não foi possível concluir. Tente novamente.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-4 selection:bg-brand selection:text-white">
       <div className="w-full max-w-md">
@@ -132,14 +187,18 @@ export default function Login() {
           </div>
 
           <h2 className="text-xl font-black text-gray-900 uppercase tracking-tight mb-2">
-            Entrar no Sistema
+            {mode === 'choice' ? 'Entrar no Sistema' : mode === 'phone-register' ? 'Criar Conta' : 'Entrar com Nome e Senha'}
           </h2>
           <p className="text-xs text-gray-500 mb-8 leading-relaxed">
-            Faça login utilizando exclusivamente sua conta <strong className="text-gray-800">Google</strong> para acessar o cardápio e fazer seus pedidos.
+            {mode === 'choice'
+              ? 'Escolha como deseja acessar o cardápio e fazer seus pedidos.'
+              : mode === 'phone-register'
+              ? 'Só na primeira vez. Depois disso, seu acesso fica salvo neste aparelho.'
+              : 'Entre com o telefone e a senha que você cadastrou.'}
           </p>
 
           {error && (
-            <motion.div 
+            <motion.div
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               className="mb-6 p-4 bg-red-50 border border-red-100 text-red-600 rounded-2xl flex items-start gap-3 text-left text-xs font-bold"
@@ -151,26 +210,119 @@ export default function Login() {
             </motion.div>
           )}
 
-          {/* Single Google Button */}
-          <button
-            onClick={handleGoogleLogin}
-            disabled={loading}
-            className="w-full bg-white text-gray-800 border-2 border-gray-200 hover:border-brand/40 py-4 px-6 rounded-2xl font-black text-sm transition-all shadow-md hover:shadow-xl active:scale-[0.98] disabled:opacity-60 flex items-center justify-center gap-3.5 group relative overflow-hidden"
-          >
-            {loading ? (
-              <>
-                <Loader2 className="animate-spin text-brand" size={22} />
-                <span className="uppercase text-xs tracking-wider">Conectando ao Google...</span>
-              </>
+          <AnimatePresence mode="wait">
+            {mode === 'choice' ? (
+              <motion.div key="choice" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-4">
+                {/* Google Button */}
+                <button
+                  onClick={handleGoogleLogin}
+                  disabled={loading}
+                  className="w-full bg-white text-gray-800 border-2 border-gray-200 hover:border-brand/40 py-4 px-6 rounded-2xl font-black text-sm transition-all shadow-md hover:shadow-xl active:scale-[0.98] disabled:opacity-60 flex items-center justify-center gap-3.5 group relative overflow-hidden"
+                >
+                  {loading ? (
+                    <>
+                      <Loader2 className="animate-spin text-brand" size={22} />
+                      <span className="uppercase text-xs tracking-wider">Conectando ao Google...</span>
+                    </>
+                  ) : (
+                    <>
+                      <GoogleIcon className="w-6 h-6 shrink-0 group-hover:scale-110 transition-transform" />
+                      <span className="uppercase tracking-wider text-xs font-black group-hover:text-brand transition-colors">
+                        Entrar com a Conta Google
+                      </span>
+                    </>
+                  )}
+                </button>
+
+                <div className="flex items-center gap-3 text-[10px] text-gray-400 font-black uppercase tracking-widest">
+                  <div className="flex-1 h-px bg-gray-100" />
+                  ou
+                  <div className="flex-1 h-px bg-gray-100" />
+                </div>
+
+                <button
+                  onClick={() => switchMode('phone-login')}
+                  className="w-full bg-gray-50 text-gray-700 border-2 border-gray-100 hover:border-brand/40 py-4 px-6 rounded-2xl font-black text-sm transition-all flex items-center justify-center gap-3 active:scale-[0.98]"
+                >
+                  <UserIcon size={20} className="shrink-0" />
+                  <span className="uppercase tracking-wider text-xs font-black">
+                    Entrar com Nome e Senha
+                  </span>
+                </button>
+              </motion.div>
             ) : (
-              <>
-                <GoogleIcon className="w-6 h-6 shrink-0 group-hover:scale-110 transition-transform" />
-                <span className="uppercase tracking-wider text-xs font-black group-hover:text-brand transition-colors">
-                  Entrar com a Conta Google
-                </span>
-              </>
+              <motion.form key="phone" onSubmit={handlePhoneSubmit} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-3 text-left">
+                <button type="button" onClick={() => switchMode('choice')} className="flex items-center gap-1 text-[10px] font-black uppercase tracking-widest text-gray-400 hover:text-brand mb-2">
+                  <ArrowLeft size={12} /> Voltar
+                </button>
+
+                {mode === 'phone-register' && (
+                  <div className="relative">
+                    <UserIcon size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+                    <input
+                      type="text"
+                      value={name}
+                      onChange={e => setName(e.target.value)}
+                      placeholder="Seu nome completo"
+                      className="w-full pl-11 pr-4 py-3.5 border-2 border-gray-100 rounded-2xl text-sm font-bold focus:outline-none focus:border-brand/50 bg-gray-50"
+                    />
+                  </div>
+                )}
+
+                <div className="relative">
+                  <Phone size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+                  <input
+                    type="tel"
+                    inputMode="numeric"
+                    value={phone}
+                    onChange={e => setPhone(formatPhoneMask(e.target.value))}
+                    placeholder="(21) 99999-9999"
+                    className="w-full pl-11 pr-4 py-3.5 border-2 border-gray-100 rounded-2xl text-sm font-bold focus:outline-none focus:border-brand/50 bg-gray-50"
+                  />
+                </div>
+
+                <div className="relative">
+                  <Lock size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+                  <input
+                    type="password"
+                    value={password}
+                    onChange={e => setPassword(e.target.value)}
+                    placeholder="Senha"
+                    className="w-full pl-11 pr-4 py-3.5 border-2 border-gray-100 rounded-2xl text-sm font-bold focus:outline-none focus:border-brand/50 bg-gray-50"
+                  />
+                </div>
+
+                {mode === 'phone-register' && (
+                  <div className="relative">
+                    <Lock size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+                    <input
+                      type="password"
+                      value={confirmPassword}
+                      onChange={e => setConfirmPassword(e.target.value)}
+                      placeholder="Confirmar senha"
+                      className="w-full pl-11 pr-4 py-3.5 border-2 border-gray-100 rounded-2xl text-sm font-bold focus:outline-none focus:border-brand/50 bg-gray-50"
+                    />
+                  </div>
+                )}
+
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="w-full bg-brand text-white py-4 px-6 rounded-2xl font-black text-sm uppercase tracking-wider transition-all shadow-md hover:shadow-xl active:scale-[0.98] disabled:opacity-60 flex items-center justify-center gap-2 mt-2"
+                >
+                  {loading ? <Loader2 className="animate-spin" size={20} /> : (mode === 'phone-register' ? 'Criar Conta' : 'Entrar')}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => switchMode(mode === 'phone-register' ? 'phone-login' : 'phone-register')}
+                  className="w-full text-center text-[11px] font-bold text-gray-500 hover:text-brand pt-1"
+                >
+                  {mode === 'phone-register' ? 'Já tem conta? Entrar' : 'Não tem conta? Criar uma agora'}
+                </button>
+              </motion.form>
             )}
-          </button>
+          </AnimatePresence>
 
           {/* Smart Persistence Info */}
           <div className="mt-8 pt-6 border-t border-gray-100 flex items-center justify-center gap-3 bg-gray-50/80 -mx-8 -mb-8 p-4 text-left">

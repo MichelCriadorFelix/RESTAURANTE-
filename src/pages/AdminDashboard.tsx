@@ -1491,7 +1491,7 @@ export default function AdminDashboard() {
                           </div>
                           <div>
                             <span className="font-bold text-gray-900 block">{u.name}</span>
-                            <span className="text-[10px] text-gray-400 font-semibold">{u.email}</span>
+                            <span className="text-[10px] text-gray-400 font-semibold">{u.email || u.phone || '—'}</span>
                           </div>
                         </div>
                       </td>

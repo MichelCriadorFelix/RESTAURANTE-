@@ -2,15 +2,27 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 import { User } from '../types';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { db, auth } from '../lib/firebase';
-import { 
-  signInWithPopup, 
-  GoogleAuthProvider, 
+import {
+  signInWithPopup,
+  GoogleAuthProvider,
   signOut,
   onAuthStateChanged,
   setPersistence,
   browserLocalPersistence,
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  updateProfile,
   User as FirebaseUser
 } from 'firebase/auth';
+
+// Firebase's email/password provider requires an email, but the phone-based
+// login is meant to need nothing but name + phone + password (no real email
+// the client has to remember). We synthesize a fake, never-emailed address
+// from the phone digits under a reserved-looking internal domain so it
+// still satisfies Firebase's format check.
+const PHONE_AUTH_DOMAIN = 'sg-phone.internal';
+const normalizePhoneDigits = (phone: string) => phone.replace(/\D/g, '');
+const phoneToPseudoEmail = (phone: string) => `${normalizePhoneDigits(phone)}@${PHONE_AUTH_DOMAIN}`;
 
 interface AuthContextType {
   user: User | null;
@@ -18,6 +30,8 @@ interface AuthContextType {
   loginWithGoogle: () => Promise<void>;
   loginWithEmail: (email: string, pass: string) => Promise<void>;
   registerWithEmail: (email: string, pass: string, name: string) => Promise<void>;
+  loginWithPhone: (phone: string, pass: string) => Promise<void>;
+  registerWithPhone: (name: string, phone: string, pass: string) => Promise<void>;
   loginWithSocial: (providerName: 'google' | 'facebook') => Promise<void>;
   logout: () => void;
   updateUser: (data: Partial<User>) => Promise<void>;
@@ -26,14 +40,16 @@ interface AuthContextType {
   refreshUser: () => Promise<void>;
 }
 
-const AuthContext = createContext<AuthContextType>({ 
-  user: null, 
-  loading: true, 
+const AuthContext = createContext<AuthContextType>({
+  user: null,
+  loading: true,
   loginWithGoogle: async () => {},
   loginWithEmail: async () => {},
   registerWithEmail: async () => {},
+  loginWithPhone: async () => {},
+  registerWithPhone: async () => {},
   loginWithSocial: async () => {},
-  logout: () => {}, 
+  logout: () => {},
   updateUser: async () => {},
   resendVerification: async () => {},
   resetPassword: async () => {},
@@ -130,6 +146,57 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }
   };
 
+  const registerWithPhone = async (name: string, phone: string, pass: string) => {
+    setLoading(true);
+    try {
+      const digits = normalizePhoneDigits(phone);
+      if (digits.length < 10) {
+        throw new Error('Informe um telefone válido com DDD.');
+      }
+      await setPersistence(auth, browserLocalPersistence);
+      const cred = await createUserWithEmailAndPassword(auth, phoneToPseudoEmail(digits), pass);
+      await updateProfile(cred.user, { displayName: name });
+
+      const userData: User = {
+        uid: cred.user.uid,
+        email: '',
+        name,
+        phone: digits,
+        role: 'user',
+        createdAt: Date.now()
+      };
+      await setDoc(doc(db, 'users', cred.user.uid), userData);
+      setUser({ ...userData, emailVerified: true });
+    } catch (err: any) {
+      if (err.code === 'auth/email-already-in-use') {
+        throw new Error('Já existe uma conta com esse número de telefone. Tente entrar em vez de criar uma nova conta.');
+      }
+      if (err.code === 'auth/weak-password') {
+        throw new Error('A senha precisa ter pelo menos 6 caracteres.');
+      }
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loginWithPhone = async (phone: string, pass: string) => {
+    setLoading(true);
+    try {
+      const digits = normalizePhoneDigits(phone);
+      await setPersistence(auth, browserLocalPersistence);
+      const cred = await signInWithEmailAndPassword(auth, phoneToPseudoEmail(digits), pass);
+      await syncUserFromFirestore(cred.user);
+    } catch (err: any) {
+      if (['auth/invalid-credential', 'auth/wrong-password', 'auth/user-not-found'].includes(err.code)) {
+        throw new Error('Telefone ou senha incorretos.');
+      }
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // Backward compatibility stubs
   const loginWithSocial = async (_providerName: 'google' | 'facebook') => {
     await loginWithGoogle();
@@ -174,9 +241,11 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       user, 
       loading, 
       loginWithGoogle,
-      loginWithEmail, 
-      registerWithEmail, 
-      loginWithSocial, 
+      loginWithEmail,
+      registerWithEmail,
+      loginWithPhone,
+      registerWithPhone,
+      loginWithSocial,
       logout, 
       updateUser,
       resendVerification,
